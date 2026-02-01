@@ -14,7 +14,7 @@ let currentSchema = null;
 const CFG = {
   // true: POST body = { stage, payload }
   // false: POST body = payload(平铺字段)
-  previewBodyMode: "envelope" // "envelope" | "flat"
+  previewBodyMode: "flat" // "envelope" | "flat"
   // 你的截图里 /preview body 是平铺字段；如果你 Worker 也支持 envelope，建议用 envelope
 };
 // =================================
@@ -301,4 +301,5 @@ $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
 $("packId").value = "xhs";
 $("packVer").value = "v1.0.0";
 $("stage").value = "S0";
+
 
