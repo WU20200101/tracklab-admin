@@ -87,7 +87,7 @@ function packUrl() {
 }
 
 function previewUrl() {
-  return `${apiBase()}/preview/${encodeURIComponent(packId())}/${encodeURIComponent(packVer())}`;
+  return `${apiBase()}/preview`;
 }
 
 // === HTTP helper ===
@@ -301,3 +301,4 @@ $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
 $("packId").value = "xhs";
 $("packVer").value = "v1.0.0";
 $("stage").value = "S0";
+
