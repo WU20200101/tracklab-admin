@@ -1,23 +1,10 @@
-/* TrackLab Admin MVP (admin.js)
- * - 全线上：只负责渲染 schema、收集表单、调用 Worker API、展示返回
- * - 不拼 prompt、不做策略判断、不补字段/猜默认值
- * - 适配：path 参数形式（/pack/:pack/:ver, /preview/:pack/:ver）
- * - 适配：forbidden 为 multi_enum
- * - 适配：/preview 支持两种 body：平铺字段 或 {stage,payload}
+/* TrackLab Admin MVP - admin.js (fix: preview body contract)
+ * 目标：让 /preview 一定发送 { pack_id, pack_version, payload }
+ * 约束：不拼 prompt、不写策略、不补字段（只收集用户选择）
  */
 
 const $ = (id) => document.getElementById(id);
-
 let currentSchema = null;
-
-// === 配置：只改这里也行 ===
-const CFG = {
-  // true: POST body = { stage, payload }
-  // false: POST body = payload(平铺字段)
-  previewBodyMode: "envelope" // "envelope" | "flat"
-  // 你的截图里 /preview body 是平铺字段；如果你 Worker 也支持 envelope，建议用 envelope
-};
-// =================================
 
 function escapeHtml(s) {
   return String(s)
@@ -30,67 +17,39 @@ function escapeHtml(s) {
 
 function setStatus(type, msg) {
   const el = $("status");
-  if (!msg) {
-    el.innerHTML = "";
-    return;
-  }
+  if (!msg) { el.innerHTML = ""; return; }
   el.innerHTML = `<div class="${type}">${escapeHtml(msg)}</div>`;
 }
 
 function normalizeBase(raw) {
   const v = (raw || "").trim().replace(/\/+$/, "");
   if (!v) throw new Error("API Base 不能为空");
-
-  // 强约束：必须是 https 且看起来是完整域名
-  if (!v.startsWith("https://")) {
-    throw new Error("API Base 必须以 https:// 开头");
-  }
-
-  // 你之前踩坑：少了 .workers.dev
-  // 这里做强校验：如果包含 tracklab-api 但不包含 workers.dev → 直接报错
-  if (v.includes("tracklab-api") && !v.includes("workers.dev")) {
-    throw new Error("API Base 不完整：看起来缺少 .workers.dev（请使用 https://tracklab-api.xxx.workers.dev）");
-  }
-
-  // 兜底：至少应包含一个点号域名结构
-  const host = v.replace("https://", "");
-  if (!host.includes(".")) {
-    throw new Error("API Base 看起来不是完整域名（缺少 .xx 后缀）");
-  }
-
+  if (!v.startsWith("https://")) throw new Error("API Base 必须以 https:// 开头");
   return v;
 }
 
-function apiBase() {
-  return normalizeBase($("apiBase").value);
-}
-
+function apiBase() { return normalizeBase($("apiBase").value); }
 function packId() {
   const v = $("packId").value.trim();
   if (!v) throw new Error("Pack ID 不能为空");
   return v;
 }
-
 function packVer() {
   const v = $("packVer").value.trim();
   if (!v) throw new Error("Pack Version 不能为空");
   return v;
 }
 
-function stage() {
-  return $("stage").value;
-}
-
-// === 路由（path 参数形式）===
 function packUrl() {
+  // 你已验证：/pack/xhs/v1.0.0 可以返回 JSON
   return `${apiBase()}/pack/${encodeURIComponent(packId())}/${encodeURIComponent(packVer())}`;
 }
 
 function previewUrl() {
+  // 关键：你的 worker /preview 需要 body 里带 pack_id/pack_version，所以 endpoint 用 /preview 即可
   return `${apiBase()}/preview`;
 }
 
-// === HTTP helper ===
 async function httpJson(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -99,26 +58,14 @@ async function httpJson(url, options = {}) {
       ...(options.headers || {})
     }
   });
-
   const text = await res.text();
   let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    // 非 JSON：把原文当错误
-  }
-
+  try { data = text ? JSON.parse(text) : null; } catch {}
   if (!res.ok) {
-    const msg =
-      data?.error ||
-      data?.message ||
-      text ||
-      `HTTP ${res.status}`;
+    const msg = data?.error || data?.message || text || `HTTP ${res.status}`;
     throw new Error(msg);
   }
-
-  // 有些 worker 会返回纯文本/空；这里保持兼容
-  return data ?? { raw: text };
+  return data ?? {};
 }
 
 function renderSchema(schema) {
@@ -138,7 +85,6 @@ function renderSchema(schema) {
     (g.fields || []).forEach((f) => {
       const field = document.createElement("div");
       field.className = "field";
-      field.dataset.key = f.key;
 
       const label = document.createElement("label");
       label.textContent = `${f.label || f.key}${f.required ? " *" : ""}`;
@@ -147,7 +93,6 @@ function renderSchema(schema) {
       if (f.type === "enum") {
         const sel = document.createElement("select");
         sel.name = f.key;
-        sel.dataset.type = "enum";
 
         const emptyOpt = document.createElement("option");
         emptyOpt.value = "";
@@ -165,8 +110,6 @@ function renderSchema(schema) {
       } else if (f.type === "multi_enum") {
         const box = document.createElement("div");
         box.className = "checks";
-        box.dataset.type = "multi_enum";
-        box.dataset.key = f.key;
 
         (f.options || []).forEach((opt) => {
           const wrap = document.createElement("label");
@@ -188,9 +131,8 @@ function renderSchema(schema) {
         field.appendChild(box);
       } else {
         const inp = document.createElement("input");
-        inp.name = f.key;
-        inp.placeholder = `未支持的字段类型：${f.type}`;
         inp.disabled = true;
+        inp.placeholder = `未支持字段类型：${f.type}`;
         field.appendChild(inp);
       }
 
@@ -222,7 +164,7 @@ function collectPayload(schema) {
       } else if (f.type === "multi_enum") {
         const checked = Array.from(
           document.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(f.key)}"]:checked`)
-        ).map((x) => x.value);
+        ).map(x => x.value);
 
         if (f.required && checked.length === 0) missing.push(f.key);
         if (checked.length) payload[f.key] = checked;
@@ -230,10 +172,7 @@ function collectPayload(schema) {
     });
   });
 
-  if (missing.length) {
-    throw new Error(`必填字段未填写：${missing.join(", ")}`);
-  }
-
+  if (missing.length) throw new Error(`必填字段未填写：${missing.join(", ")}`);
   return payload;
 }
 
@@ -246,10 +185,7 @@ async function loadSchema() {
 
   const data = await httpJson(url, { method: "GET" });
 
-  // 兼容不同返回结构：
-  // - { schema: {...} }
-  // - 直接是 schema
-  // - { ui_schema: {...} }
+  // 兼容：{schema:{...}} 或直接 schema
   const schema = data?.schema || data?.ui_schema || data;
 
   currentSchema = schema;
@@ -264,16 +200,14 @@ async function previewPrompt() {
   setStatus("", "");
   const payload = collectPayload(currentSchema);
 
+  // 关键：严格按 worker 要求发送这三个字段
+  const bodyObj = {
+    pack_id: packId(),
+    pack_version: packVer(),
+    payload
+  };
+
   const url = previewUrl();
-
-  let bodyObj;
-  bodyObj = {
-  pack_id: packId(),
-  pack_version: packVer(),
-  payload
-};
-
-
   setStatus("muted", `POST ${url}`);
 
   const out = await httpJson(url, {
@@ -283,25 +217,16 @@ async function previewPrompt() {
 
   $("previewOut").textContent = JSON.stringify(out, null, 2);
 
-  if (out?.blocked) {
-    setStatus("error", `被 Gate 拦截：${(out.reasons || []).join("; ")}`);
-  } else if (out?.prompt_text) {
-    setStatus("ok", "Preview 成功返回 prompt_text");
-  } else {
-    // 仍然返回了 JSON，但没有 prompt_text
-    setStatus("muted", "Preview 返回成功，但未发现 prompt_text（检查 Worker 返回结构）");
-  }
+  if (out?.blocked) setStatus("error", `被 Gate 拦截：${(out.reasons || []).join("; ")}`);
+  else if (out?.prompt_text) setStatus("ok", "Preview 成功返回 prompt_text");
+  else setStatus("muted", "Preview 返回成功，但未发现 prompt_text（检查 worker 返回结构）");
 }
 
-// === 绑定按钮 ===
-$("btnLoad").addEventListener("click", () => loadSchema().catch((e) => setStatus("error", e.message)));
-$("btnPreview").addEventListener("click", () => previewPrompt().catch((e) => setStatus("error", e.message)));
+$("btnLoad").addEventListener("click", () => loadSchema().catch(e => setStatus("error", e.message)));
+$("btnPreview").addEventListener("click", () => previewPrompt().catch(e => setStatus("error", e.message)));
 
-// === 默认值（防止你再次把 workers.dev 填丢）===
+// 默认值（你说显示不全是 UI 现象，不影响实际值；但这里仍然写全）
 $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
 $("packId").value = "xhs";
 $("packVer").value = "v1.0.0";
 $("stage").value = "S0";
-
-
-
