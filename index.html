@@ -74,36 +74,59 @@
       <div id="status" style="margin-top:10px;"></div>
     </div>
 
+    <!-- ✅ 新增：Preset（只做创建/列表/选择，不做判断） -->
     <div class="card">
-  <h3 style="margin:0 0 8px 0;">Jobs（只读）</h3>
+      <h3 style="margin:0 0 8px 0;">Preset（角色 / 预设）</h3>
+      <div class="muted">只做事实写入与选择：/preset/create /preset/list（不淘汰，不推进阶段）</div>
 
-  <div class="row">
-    <div>
-      <label>当前 Preset ID</label>
-      <input id="presetId" placeholder="从 preset 下拉选择后自动填入" readonly />
-      <div class="muted">用于查询：/jobs/stats_by_preset 与 /jobs/by_preset</div>
-    </div>
-    <div>
-      <label>&nbsp;</label>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button id="btnJobsStats" style="width:auto; padding:10px 14px;">统计</button>
-        <button id="btnJobsList" class="primary" style="width:auto; padding:10px 14px;">最近 Jobs</button>
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Preset Name</label>
+          <input id="presetName" placeholder="例如：test-1" />
+        </div>
+        <div>
+          <label>已存在 Presets（当前 pack/version/stage）</label>
+          <select id="presetSelect">
+            <option value="">(empty)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnPresetCreate" class="primary" style="width:auto;padding:10px 14px;">保存为新 Preset</button>
+        <button id="btnPresetRefresh" style="width:auto;padding:10px 14px;">刷新 Preset 列表</button>
+        <button id="btnPresetUse" style="width:auto;padding:10px 14px;">使用所选 Preset（只用于 Jobs 查询）</button>
+      </div>
+
+      <div class="group">
+        <label>当前 Preset ID（用于 Jobs）</label>
+        <input id="presetId" placeholder="选择 preset 后自动填入" readonly />
+        <div class="muted">注意：Generate 仍然按你现在的方式（stage+payload），这里不改变 Generate 行为。</div>
       </div>
     </div>
-  </div>
 
-  <div id="jobsStats" class="muted" style="margin-top:10px;">(empty)</div>
+    <!-- ✅ 新增：Jobs（只读） -->
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Jobs（只读）</h3>
+      <div class="muted">只展示事实：统计 / 最近 20 条 / 点 job_id 看详情</div>
 
-  <div class="group">
-    <h4 style="margin:0 0 10px 0;">最近 20 条</h4>
-    <div id="jobsTable" class="muted">(empty)</div>
-  </div>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnJobsStats" style="width:auto;padding:10px 14px;">统计</button>
+        <button id="btnJobsList" class="primary" style="width:auto;padding:10px 14px;">最近 Jobs</button>
+      </div>
 
-  <div class="group">
-    <h4 style="margin:0 0 10px 0;">Job 详情</h4>
-    <pre id="jobDetail">(empty)</pre>
-  </div>
-</div>
+      <div id="jobsStats" class="muted" style="margin-top:10px;">(empty)</div>
+
+      <div class="group">
+        <h4 style="margin:0 0 10px 0;">最近 20 条</h4>
+        <div id="jobsTable" class="muted">(empty)</div>
+      </div>
+
+      <div class="group">
+        <h4 style="margin:0 0 10px 0;">Job 详情</h4>
+        <pre id="jobDetail">(empty)</pre>
+      </div>
+    </div>
 
     <div class="card">
       <h3>表单</h3>
@@ -116,10 +139,6 @@
     </div>
   </div>
 
-  <script src="./admin.js?v=20260202a"></script>
+  <script src="./admin.js?v=20260202b"></script>
 </body>
 </html>
-
-
-
-
