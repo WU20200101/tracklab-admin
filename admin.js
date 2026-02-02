@@ -320,7 +320,7 @@ async function previewPrompt() {
 }
 
 
-aasync function onGenerate() {
+async function onGenerate() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
   // preset_id：从 UI 的“当前 Preset ID（用于 Jobs / 更新）”输入框取
@@ -630,6 +630,7 @@ function setDefaults() {
 
 setDefaults();
 bindEvents();
+
 
 
 
