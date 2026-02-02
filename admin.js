@@ -400,6 +400,7 @@ function bindPresetSelectAutofill() {
 }
 
 // ✅ 新增：GET preset → 回填表单
+// ✅ 新增：GET preset → 回填表单
 async function presetLoadSelectedToForm() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
@@ -421,8 +422,11 @@ async function presetLoadSelectedToForm() {
 
   // 回填表单（只按 schema key 回填）
   applyPayloadToForm(currentSchema, item.payload || {});
-applyStageLock(currentSchema, getStage());
-setStatus("ok", `已加载 preset 到表单：${item.name || item.id}`);
+  applyStageLock(currentSchema, getStage());
+
+  setStatus("ok", `已加载 preset 到表单：${item.name || item.id}`);
+}
+
 
 
 // ✅ 新增：用当前表单 payload 覆盖更新 preset
@@ -573,7 +577,7 @@ function bindEvents() {
 
   $("stage").addEventListener("change", () => {
   if (currentSchema) applyStageLock(currentSchema, getStage());
-});
+  });
 
 }
 
@@ -587,4 +591,5 @@ function setDefaults() {
 
 setDefaults();
 bindEvents();
+
 
