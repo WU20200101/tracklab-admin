@@ -75,6 +75,37 @@
     </div>
 
     <div class="card">
+  <h3 style="margin:0 0 8px 0;">Jobs（只读）</h3>
+
+  <div class="row">
+    <div>
+      <label>当前 Preset ID</label>
+      <input id="presetId" placeholder="从 preset 下拉选择后自动填入" readonly />
+      <div class="muted">用于查询：/jobs/stats_by_preset 与 /jobs/by_preset</div>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="btnJobsStats" style="width:auto; padding:10px 14px;">统计</button>
+        <button id="btnJobsList" class="primary" style="width:auto; padding:10px 14px;">最近 Jobs</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="jobsStats" class="muted" style="margin-top:10px;">(empty)</div>
+
+  <div class="group">
+    <h4 style="margin:0 0 10px 0;">最近 20 条</h4>
+    <div id="jobsTable" class="muted">(empty)</div>
+  </div>
+
+  <div class="group">
+    <h4 style="margin:0 0 10px 0;">Job 详情</h4>
+    <pre id="jobDetail">(empty)</pre>
+  </div>
+</div>
+
+    <div class="card">
       <h3>表单</h3>
       <div id="formHost" class="muted">先点击「加载 Schema」</div>
     </div>
@@ -88,6 +119,7 @@
   <script src="./admin.js?v=20260202a"></script>
 </body>
 </html>
+
 
 
 
