@@ -74,10 +74,10 @@
       <div id="status" style="margin-top:10px;"></div>
     </div>
 
-    <!-- ✅ 新增：Preset（只做创建/列表/选择，不做判断） -->
+    <!-- Preset -->
     <div class="card">
       <h3 style="margin:0 0 8px 0;">Preset（角色 / 预设）</h3>
-      <div class="muted">只做事实写入与选择：/preset/create /preset/list（不淘汰，不推进阶段）</div>
+      <div class="muted">只做事实写入与选择：/preset/create /preset/list /preset/get /preset/update（不淘汰，不推进阶段）</div>
 
       <div class="row" style="margin-top:12px;">
         <div>
@@ -96,16 +96,20 @@
         <button id="btnPresetCreate" class="primary" style="width:auto;padding:10px 14px;">保存为新 Preset</button>
         <button id="btnPresetRefresh" style="width:auto;padding:10px 14px;">刷新 Preset 列表</button>
         <button id="btnPresetUse" style="width:auto;padding:10px 14px;">使用所选 Preset（只用于 Jobs 查询）</button>
+
+        <!-- ✅ 新增 -->
+        <button id="btnPresetLoadToForm" style="width:auto;padding:10px 14px;">加载所选 Preset 到表单</button>
+        <button id="btnPresetUpdateFromForm" class="primary" style="width:auto;padding:10px 14px;">用当前表单更新 Preset</button>
       </div>
 
       <div class="group">
-        <label>当前 Preset ID（用于 Jobs）</label>
+        <label>当前 Preset ID（用于 Jobs / 更新）</label>
         <input id="presetId" placeholder="选择 preset 后自动填入" readonly />
         <div class="muted">注意：Generate 仍然按你现在的方式（stage+payload），这里不改变 Generate 行为。</div>
       </div>
     </div>
 
-    <!-- ✅ 新增：Jobs（只读） -->
+    <!-- Jobs（只读） -->
     <div class="card">
       <h3 style="margin:0 0 8px 0;">Jobs（只读）</h3>
       <div class="muted">只展示事实：统计 / 最近 20 条 / 点 job_id 看详情</div>
@@ -139,6 +143,6 @@
     </div>
   </div>
 
-  <script src="./admin.js?v=20260202b"></script>
+  <script src="./admin.js?v=20260202c"></script>
 </body>
 </html>
