@@ -222,6 +222,24 @@ async function previewPrompt() {
   else setStatus("muted", "Preview 返回成功，但未发现 prompt_text（检查 worker 返回结构）");
 }
 
+async function onGenerate() {
+  const body = {
+    pack_id: getPackId(),
+    pack_version: getPackVersion(),
+    stage: getStage(),
+    payload: collectPayload()
+  };
+
+  const out = await httpJson(`${apiBase()}/generate`, {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+
+  document.getElementById("genOut").textContent = JSON.stringify(out, null, 2);
+}
+document.getElementById("btnGenerate").addEventListener("click", () => onGenerate().catch(showError));
+
+
 $("btnLoad").addEventListener("click", () => loadSchema().catch(e => setStatus("error", e.message)));
 $("btnPreview").addEventListener("click", () => previewPrompt().catch(e => setStatus("error", e.message)));
 
@@ -230,3 +248,4 @@ $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
 $("packId").value = "xhs";
 $("packVer").value = "v1.0.0";
 $("stage").value = "S0";
+
