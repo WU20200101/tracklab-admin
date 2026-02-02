@@ -6,6 +6,11 @@
 const $ = (id) => document.getElementById(id);
 let currentSchema = null;
 
+function showError(e) {
+  console.error(e);
+  setStatus("error", e?.message || String(e));
+}
+
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -227,7 +232,7 @@ async function onGenerate() {
     pack_id: getPackId(),
     pack_version: getPackVersion(),
     stage: getStage(),
-    payload: collectPayload()
+    payload: collectPayload(currentSchema)
   };
 
   const out = await httpJson(`${apiBase()}/generate`, {
@@ -235,9 +240,9 @@ async function onGenerate() {
     body: JSON.stringify(body)
   });
 
-  document.getElementById("genOut").textContent = JSON.stringify(out, null, 2);
+  $("genOut").textContent = JSON.stringify(out, null, 2);
+  setStatus("ok", `Generate done: job_id=${out.job_id || "n/a"}`);
 }
-document.getElementById("btnGenerate").addEventListener("click", () => onGenerate().catch(showError));
 
 $("btnLoad").addEventListener("click", () => loadSchema().catch(e => setStatus("error", e.message)));
 $("btnPreview").addEventListener("click", () => previewPrompt().catch(e => setStatus("error", e.message)));
@@ -248,5 +253,8 @@ $("packId").value = "xhs";
 $("packVer").value = "v1.0.0";
 $("stage").value = "S0";
 
+function getPackId() { return $("packId").value.trim(); }
+function getPackVersion() { return $("packVer").value.trim(); }
+function getStage() { return $("stage").value; }
 
 
