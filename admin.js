@@ -239,7 +239,6 @@ async function onGenerate() {
 }
 document.getElementById("btnGenerate").addEventListener("click", () => onGenerate().catch(showError));
 
-$("genOut").textContent = JSON.stringify(out, null, 2);
 $("btnLoad").addEventListener("click", () => loadSchema().catch(e => setStatus("error", e.message)));
 $("btnPreview").addEventListener("click", () => previewPrompt().catch(e => setStatus("error", e.message)));
 
@@ -248,5 +247,6 @@ $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
 $("packId").value = "xhs";
 $("packVer").value = "v1.0.0";
 $("stage").value = "S0";
+
 
 
