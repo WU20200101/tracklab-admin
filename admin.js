@@ -1,10 +1,18 @@
-/* TrackLab Admin MVP - admin.js (fix: preview body contract)
- * 目标：让 /preview 一定发送 { pack_id, pack_version, payload }
- * 约束：不拼 prompt、不写策略、不补字段（只收集用户选择）
+/* TrackLab Admin MVP - admin.js
+ * 目标：
+ * - /pack 加载 schema
+ * - /preview 预览 prompt
+ * - /generate 生成内容并写 jobs
+ * 约束：
+ * - 不拼 prompt
+ * - 不写策略
+ * - 不补字段
  */
 
 const $ = (id) => document.getElementById(id);
 let currentSchema = null;
+
+/* ---------- 通用工具 ---------- */
 
 function showError(e) {
   console.error(e);
@@ -22,37 +30,11 @@ function escapeHtml(s) {
 
 function setStatus(type, msg) {
   const el = $("status");
-  if (!msg) { el.innerHTML = ""; return; }
+  if (!msg) {
+    el.innerHTML = "";
+    return;
+  }
   el.innerHTML = `<div class="${type}">${escapeHtml(msg)}</div>`;
-}
-
-function normalizeBase(raw) {
-  const v = (raw || "").trim().replace(/\/+$/, "");
-  if (!v) throw new Error("API Base 不能为空");
-  if (!v.startsWith("https://")) throw new Error("API Base 必须以 https:// 开头");
-  return v;
-}
-
-function apiBase() { return normalizeBase($("apiBase").value); }
-function packId() {
-  const v = $("packId").value.trim();
-  if (!v) throw new Error("Pack ID 不能为空");
-  return v;
-}
-function packVer() {
-  const v = $("packVer").value.trim();
-  if (!v) throw new Error("Pack Version 不能为空");
-  return v;
-}
-
-function packUrl() {
-  // 你已验证：/pack/xhs/v1.0.0 可以返回 JSON
-  return `${apiBase()}/pack/${encodeURIComponent(packId())}/${encodeURIComponent(packVer())}`;
-}
-
-function previewUrl() {
-  // 关键：你的 worker /preview 需要 body 里带 pack_id/pack_version，所以 endpoint 用 /preview 即可
-  return `${apiBase()}/preview`;
 }
 
 async function httpJson(url, options = {}) {
@@ -60,32 +42,63 @@ async function httpJson(url, options = {}) {
     ...options,
     headers: {
       "content-type": "application/json",
-      ...(options.headers || {})
-    }
+      ...(options.headers || {}),
+    },
   });
+
   const text = await res.text();
   let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch {}
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {}
+
   if (!res.ok) {
     const msg = data?.error || data?.message || text || `HTTP ${res.status}`;
     throw new Error(msg);
   }
+
   return data ?? {};
 }
+
+/* ---------- 基础取值（关键：统一入口） ---------- */
+
+function apiBase() {
+  const v = $("apiBase").value.trim().replace(/\/+$/, "");
+  if (!v) throw new Error("API Base 不能为空");
+  return v;
+}
+
+function getPackId() {
+  const v = $("packId").value.trim();
+  if (!v) throw new Error("Pack ID 不能为空");
+  return v;
+}
+
+function getPackVersion() {
+  const v = $("packVer").value.trim();
+  if (!v) throw new Error("Pack Version 不能为空");
+  return v;
+}
+
+function getStage() {
+  return $("stage").value;
+}
+
+/* ---------- Schema 渲染 ---------- */
 
 function renderSchema(schema) {
   const host = $("formHost");
   host.innerHTML = "";
 
   if (!schema || !Array.isArray(schema.groups)) {
-    host.innerHTML = `<div class="error">schema 格式不符合预期：缺少 groups</div>`;
+    host.innerHTML = `<div class="error">schema 格式错误：缺少 groups</div>`;
     return;
   }
 
-  schema.groups.forEach((g, gi) => {
+  schema.groups.forEach((g) => {
     const group = document.createElement("div");
-    group.className = gi === 0 ? "" : "group";
-    group.innerHTML = `<h4 style="margin:0 0 10px 0;">${escapeHtml(g.label || g.id || "group")}</h4>`;
+    group.className = "group";
+    group.innerHTML = `<h4>${escapeHtml(g.label || g.id || "group")}</h4>`;
 
     (g.fields || []).forEach((f) => {
       const field = document.createElement("div");
@@ -99,10 +112,10 @@ function renderSchema(schema) {
         const sel = document.createElement("select");
         sel.name = f.key;
 
-        const emptyOpt = document.createElement("option");
-        emptyOpt.value = "";
-        emptyOpt.textContent = "请选择";
-        sel.appendChild(emptyOpt);
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "请选择";
+        sel.appendChild(empty);
 
         (f.options || []).forEach((opt) => {
           const o = document.createElement("option");
@@ -122,8 +135,8 @@ function renderSchema(schema) {
 
           const cb = document.createElement("input");
           cb.type = "checkbox";
-          cb.value = opt.value;
           cb.name = f.key;
+          cb.value = opt.value;
 
           const span = document.createElement("span");
           span.textContent = opt.label || opt.value;
@@ -134,11 +147,6 @@ function renderSchema(schema) {
         });
 
         field.appendChild(box);
-      } else {
-        const inp = document.createElement("input");
-        inp.disabled = true;
-        inp.placeholder = `未支持字段类型：${f.type}`;
-        field.appendChild(inp);
       }
 
       if (f.hint) {
@@ -163,13 +171,17 @@ function collectPayload(schema) {
     (g.fields || []).forEach((f) => {
       if (f.type === "enum") {
         const sel = document.querySelector(`select[name="${CSS.escape(f.key)}"]`);
-        const v = sel ? sel.value : "";
+        const v = sel?.value;
         if (f.required && !v) missing.push(f.key);
         if (v) payload[f.key] = v;
-      } else if (f.type === "multi_enum") {
+      }
+
+      if (f.type === "multi_enum") {
         const checked = Array.from(
-          document.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(f.key)}"]:checked`)
-        ).map(x => x.value);
+          document.querySelectorAll(
+            `input[type="checkbox"][name="${CSS.escape(f.key)}"]:checked`
+          )
+        ).map((x) => x.value);
 
         if (f.required && checked.length === 0) missing.push(f.key);
         if (checked.length) payload[f.key] = checked;
@@ -177,21 +189,25 @@ function collectPayload(schema) {
     });
   });
 
-  if (missing.length) throw new Error(`必填字段未填写：${missing.join(", ")}`);
+  if (missing.length) {
+    throw new Error(`必填字段未填写：${missing.join(", ")}`);
+  }
+
   return payload;
 }
+
+/* ---------- 行为 ---------- */
 
 async function loadSchema() {
   setStatus("", "");
   $("previewOut").textContent = "(empty)";
+  $("genOut").textContent = "(empty)";
 
-  const url = packUrl();
+  const url = `${apiBase()}/pack/${getPackId()}/${getPackVersion()}`;
   setStatus("muted", `GET ${url}`);
 
-  const data = await httpJson(url, { method: "GET" });
-
-  // 兼容：{schema:{...}} 或直接 schema
-  const schema = data?.schema || data?.ui_schema || data;
+  const data = await httpJson(url);
+  const schema = data.ui_schema || data.schema || data;
 
   currentSchema = schema;
   renderSchema(schema);
@@ -205,56 +221,54 @@ async function previewPrompt() {
   setStatus("", "");
   const payload = collectPayload(currentSchema);
 
-  // 关键：严格按 worker 要求发送这三个字段
-  const bodyObj = {
-    pack_id: packId(),
-    pack_version: packVer(),
-    payload
+  const body = {
+    pack_id: getPackId(),
+    pack_version: getPackVersion(),
+    payload,
   };
 
-  const url = previewUrl();
-  setStatus("muted", `POST ${url}`);
-
-  const out = await httpJson(url, {
+  const out = await httpJson(`${apiBase()}/preview`, {
     method: "POST",
-    body: JSON.stringify(bodyObj)
+    body: JSON.stringify(body),
   });
 
   $("previewOut").textContent = JSON.stringify(out, null, 2);
 
-  if (out?.blocked) setStatus("error", `被 Gate 拦截：${(out.reasons || []).join("; ")}`);
-  else if (out?.prompt_text) setStatus("ok", "Preview 成功返回 prompt_text");
-  else setStatus("muted", "Preview 返回成功，但未发现 prompt_text（检查 worker 返回结构）");
+  if (out.blocked) {
+    setStatus("error", `被 Gate 拦截：${(out.reasons || []).join("; ")}`);
+  } else {
+    setStatus("ok", "Preview 成功");
+  }
 }
 
 async function onGenerate() {
+  if (!currentSchema) throw new Error("请先加载 Schema");
+
   const body = {
     pack_id: getPackId(),
     pack_version: getPackVersion(),
     stage: getStage(),
-    payload: collectPayload(currentSchema)
+    payload: collectPayload(currentSchema),
   };
 
   const out = await httpJson(`${apiBase()}/generate`, {
     method: "POST",
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 
   $("genOut").textContent = JSON.stringify(out, null, 2);
-  setStatus("ok", `Generate done: job_id=${out.job_id || "n/a"}`);
+  setStatus("ok", `Generate 完成，job_id=${out.job_id || "n/a"}`);
 }
 
-$("btnLoad").addEventListener("click", () => loadSchema().catch(e => setStatus("error", e.message)));
-$("btnPreview").addEventListener("click", () => previewPrompt().catch(e => setStatus("error", e.message)));
+/* ---------- 事件绑定 ---------- */
 
-// 默认值（你说显示不全是 UI 现象，不影响实际值；但这里仍然写全）
+$("btnLoad").addEventListener("click", () => loadSchema().catch(showError));
+$("btnPreview").addEventListener("click", () => previewPrompt().catch(showError));
+$("btnGenerate").addEventListener("click", () => onGenerate().catch(showError));
+
+/* ---------- 默认值 ---------- */
+
 $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
 $("packId").value = "xhs";
 $("packVer").value = "v1.0.0";
 $("stage").value = "S0";
-
-function getPackId() { return $("packId").value.trim(); }
-function getPackVersion() { return $("packVer").value.trim(); }
-function getStage() { return $("stage").value; }
-
-
