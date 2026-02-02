@@ -295,10 +295,16 @@ async function previewPrompt() {
   setStatus("", "");
   const payload = collectPayload(currentSchema);
 
+  // 同 generate：从“当前 Preset ID（用于 Jobs / 更新）”取
+  // 如果你的 input id 不是 presetId，把这里改成真实 id
+  const preset_id = (document.getElementById("presetId")?.value || "").trim();
+  if (!preset_id) throw new Error("missing_preset_id（请先选择/加载一个 Preset）");
+
   const body = {
     pack_id: getPackId(),
     pack_version: getPackVersion(),
     stage: getStage(),
+    preset_id,
     payload,
   };
 
@@ -313,14 +319,21 @@ async function previewPrompt() {
   else setStatus("ok", "Preview 成功");
 }
 
-async function onGenerate() {
+
+aasync function onGenerate() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
-  // ✅ 保持你现有生成方式：stage + payload
+  // preset_id：从 UI 的“当前 Preset ID（用于 Jobs / 更新）”输入框取
+  // 你截图里已经有这个输入框；这里假设它的 id 是 "presetId"（如果不同，把 id 改成你的实际值）
+  const preset_id = (document.getElementById("presetId")?.value || "").trim();
+  if (!preset_id) throw new Error("missing_preset_id（请先选择/加载一个 Preset）");
+
+  // ✅ 保持现有生成方式：stage + payload（只多带一个事实字段 preset_id）
   const body = {
     pack_id: getPackId(),
     pack_version: getPackVersion(),
     stage: getStage(),
+    preset_id,
     payload: collectPayload(currentSchema),
   };
 
@@ -332,6 +345,7 @@ async function onGenerate() {
   $("genOut").textContent = JSON.stringify(out, null, 2);
   setStatus("ok", `Generate 完成，job_id=${out.job_id || "na"}`);
 }
+
 
 // ---------- Preset（保持 create/list/use） ----------
 async function presetCreateFromCurrentPayload() {
@@ -616,6 +630,7 @@ function setDefaults() {
 
 setDefaults();
 bindEvents();
+
 
 
 
