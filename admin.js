@@ -177,7 +177,9 @@ function collectPayload(schema) {
       if (f.type === "enum") {
         const sel = document.querySelector(`select[name="${CSS.escape(f.key)}"]`);
         const v = sel ? sel.value : "";
-        if (f.required && !v) missing.push(f.key);
+        const reqStages = Array.isArray(f.required_stages) ? f.required_stages : null;
+const isRequiredNow = !!f.required && (!reqStages || reqStages.includes(getStage()));
+if (isRequiredNow && !v) missing.push(f.key);
         if (v) payload[f.key] = v;
       }
 
@@ -186,7 +188,10 @@ function collectPayload(schema) {
           document.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(f.key)}"]:checked`)
         ).map((x) => x.value);
 
-        if (f.required && checked.length === 0) missing.push(f.key);
+        const reqStages = Array.isArray(f.required_stages) ? f.required_stages : null;
+const isRequiredNow = !!f.required && (!reqStages || reqStages.includes(getStage()));
+if (isRequiredNow && checked.length === 0) missing.push(f.key);
+
         if (checked.length) payload[f.key] = checked;
       }
     });
@@ -591,5 +596,6 @@ function setDefaults() {
 
 setDefaults();
 bindEvents();
+
 
 
