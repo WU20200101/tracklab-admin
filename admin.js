@@ -553,11 +553,27 @@ async function onJobsStats() {
 }
 
 async function onJobsList() {
-  const presetId = getEffectivePresetIdOrThrow();
-  const out = await httpJson(buildJobsByPresetUrl(presetId, 20), { method: "GET" });
-  renderJobsTable(out.items || []);
-  setStatus("ok", "Jobs 列表已刷新");
+  try {
+    const presetId = getEffectivePresetIdOrThrow();
+
+    setStatus("info", "正在加载 Jobs…");
+    const out = await httpJson(buildJobsByPresetUrl(presetId, 20), { method: "GET" });
+
+    const items = (out && Array.isArray(out.items)) ? out.items : [];
+    renderJobsTable(items);
+
+    if (items.length === 0) {
+      setStatus("warn", "最近 Jobs：0 条（该 preset 可能还没生成过内容）");
+    } else {
+      setStatus("ok", `Jobs 列表已刷新：${items.length} 条`);
+    }
+  } catch (e) {
+    console.error(e);
+    // 关键：把错误显示到 UI，而不是静默
+    setStatus("error", `Jobs 加载失败：${String(e?.message || e)}`); 
+  }
 }
+
 
 // ---------- 事件绑定 ----------
 function bindEvents() {
@@ -600,6 +616,7 @@ function setDefaults() {
 
 setDefaults();
 bindEvents();
+
 
 
 
