@@ -163,6 +163,9 @@ function renderSchema(schema) {
 
     host.appendChild(group);
   });
+
+  applyStageLock(schema, getStage());
+
 }
 
 function collectPayload(schema) {
@@ -193,7 +196,36 @@ function collectPayload(schema) {
   return payload;
 }
 
-// ---------- 新增：回填（不猜字段，不补字段，只按 schema 回填已有 key） ----------
+// ---------- 新增：按 stage 锁定字段（只禁用，不改值，不写策略） ----------
+function applyStageLock(schema, stage) {
+  if (!schema || !schema.groups) return;
+
+  schema.groups.forEach((group) => {
+    (group.fields || []).forEach((field) => {
+      const editableStages = Array.isArray(field.editable_stages)
+        ? field.editable_stages
+        : null;
+
+      // 没写 editable_stages = 默认可编辑（兼容旧 schema）
+      const editable = !editableStages || editableStages.includes(stage);
+
+      if (field.type === "enum") {
+        const sel = document.querySelector(
+          `select[name="${CSS.escape(field.key)}"]`
+        );
+        if (sel) sel.disabled = !editable;
+      }
+
+      if (field.type === "multi_enum") {
+        const boxes = document.querySelectorAll(
+          `input[type="checkbox"][name="${CSS.escape(field.key)}"]`
+        );
+        boxes.forEach((cb) => (cb.disabled = !editable));
+      }
+    });
+  });
+}
+
 function applyPayloadToForm(schema, payload) {
   if (!schema) return;
   const p = payload || {};
@@ -389,9 +421,9 @@ async function presetLoadSelectedToForm() {
 
   // 回填表单（只按 schema key 回填）
   applyPayloadToForm(currentSchema, item.payload || {});
+applyStageLock(currentSchema, getStage());
+setStatus("ok", `已加载 preset 到表单：${item.name || item.id}`);
 
-  setStatus("ok", `已加载 preset 到表单：${item.name || item.id}`);
-}
 
 // ✅ 新增：用当前表单 payload 覆盖更新 preset
 async function presetUpdateFromCurrentForm() {
@@ -538,6 +570,11 @@ function bindEvents() {
   $("btnJobsList").addEventListener("click", () => onJobsList().catch(showError));
 
   bindPresetSelectAutofill();
+
+  $("stage").addEventListener("change", () => {
+  if (currentSchema) applyStageLock(currentSchema, getStage());
+});
+
 }
 
 // ---------- 默认值 ----------
@@ -550,3 +587,4 @@ function setDefaults() {
 
 setDefaults();
 bindEvents();
+
