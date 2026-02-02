@@ -1,21 +1,20 @@
-/* TrackLab Admin MVP - admin.js
+/* TrackLab Admin - admin.js (cover)
  * 目标：
- * - /pack 加载 schema
- * - /preview 预览 prompt
- * - /generate 生成内容并写 jobs
- * - 新增：/preset/create /preset/list（只写事实+选择）
- * - 新增：/jobs/*（只读展示）
+ * - pack 加载 schema
+ * - preview 预览 prompt
+ * - generate 生成内容并写 jobs
+ * - preset：create/list/use + 新增 get(回填) + update(覆盖更新)
+ * - jobs：只读展示
  * 约束：
  * - 不拼 prompt
  * - 不写策略
- * - 不补字段
+ * - 不补字段/不猜默认值
  */
 
 const $ = (id) => document.getElementById(id);
 let currentSchema = null;
 
-/* ---------- 通用工具 ---------- */
-
+// ---------- 通用工具 ----------
 function showError(e) {
   console.error(e);
   setStatus("error", e?.message || String(e));
@@ -55,39 +54,40 @@ async function httpJson(url, options = {}) {
   } catch {}
 
   if (!res.ok) {
-    const msg = data?.error || data?.message || text || `HTTP ${res.status}`;
+    const msg = (data && (data.error || data.message)) || text || `HTTP ${res.status}`;
     throw new Error(msg);
   }
 
-  return data ?? {};
+  return data || {};
 }
 
-/* ---------- 基础取值（关键：统一入口） ---------- */
-
+// ---------- 基础取值（统一入口） ----------
 function apiBase() {
   const v = $("apiBase").value.trim().replace(/\/+$/, "");
   if (!v) throw new Error("API Base 不能为空");
   return v;
 }
-
 function getPackId() {
   const v = $("packId").value.trim();
   if (!v) throw new Error("Pack ID 不能为空");
   return v;
 }
-
 function getPackVersion() {
   const v = $("packVer").value.trim();
   if (!v) throw new Error("Pack Version 不能为空");
   return v;
 }
-
 function getStage() {
   return $("stage").value;
 }
+function setStage(stage) {
+  if (!stage) return;
+  const sel = $("stage");
+  const exists = Array.from(sel.options).some((o) => o.value === stage);
+  if (exists) sel.value = stage;
+}
 
-/* ---------- Schema 渲染 ---------- */
-
+// ---------- Schema 渲染 ----------
 function renderSchema(schema) {
   const host = $("formHost");
   host.innerHTML = "";
@@ -173,16 +173,14 @@ function collectPayload(schema) {
     (g.fields || []).forEach((f) => {
       if (f.type === "enum") {
         const sel = document.querySelector(`select[name="${CSS.escape(f.key)}"]`);
-        const v = sel?.value;
+        const v = sel ? sel.value : "";
         if (f.required && !v) missing.push(f.key);
         if (v) payload[f.key] = v;
       }
 
       if (f.type === "multi_enum") {
         const checked = Array.from(
-          document.querySelectorAll(
-            `input[type="checkbox"][name="${CSS.escape(f.key)}"]:checked`
-          )
+          document.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(f.key)}"]:checked`)
         ).map((x) => x.value);
 
         if (f.required && checked.length === 0) missing.push(f.key);
@@ -191,15 +189,45 @@ function collectPayload(schema) {
     });
   });
 
-  if (missing.length) {
-    throw new Error(`必填字段未填写：${missing.join(", ")}`);
-  }
-
+  if (missing.length) throw new Error(`必填字段未填写：${missing.join(", ")}`);
   return payload;
 }
 
-/* ---------- 原有行为（保持不变） ---------- */
+// ---------- 新增：回填（不猜字段，不补字段，只按 schema 回填已有 key） ----------
+function applyPayloadToForm(schema, payload) {
+  if (!schema) return;
+  const p = payload || {};
 
+  schema.groups.forEach((g) => {
+    (g.fields || []).forEach((f) => {
+      const key = f.key;
+      if (!(key in p)) {
+        // 不在 payload 里：清空 UI（避免脏状态）
+        if (f.type === "enum") {
+          const sel = document.querySelector(`select[name="${CSS.escape(key)}"]`);
+          if (sel) sel.value = "";
+        } else if (f.type === "multi_enum") {
+          const cbs = document.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(key)}"]`);
+          cbs.forEach((cb) => (cb.checked = false));
+        }
+        return;
+      }
+
+      if (f.type === "enum") {
+        const sel = document.querySelector(`select[name="${CSS.escape(key)}"]`);
+        if (sel) sel.value = String(p[key] ?? "");
+      }
+
+      if (f.type === "multi_enum") {
+        const want = new Set(Array.isArray(p[key]) ? p[key].map(String) : []);
+        const cbs = document.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(key)}"]`);
+        cbs.forEach((cb) => (cb.checked = want.has(String(cb.value))));
+      }
+    });
+  });
+}
+
+// ---------- 原有行为（保持） ----------
 async function loadSchema() {
   setStatus("", "");
   $("previewOut").textContent = "(empty)";
@@ -229,6 +257,7 @@ async function previewPrompt() {
   const body = {
     pack_id: getPackId(),
     pack_version: getPackVersion(),
+    stage: getStage(),
     payload,
   };
 
@@ -239,11 +268,8 @@ async function previewPrompt() {
 
   $("previewOut").textContent = JSON.stringify(out, null, 2);
 
-  if (out.blocked) {
-    setStatus("error", `被 Gate 拦截：${(out.reasons || []).join("; ")}`);
-  } else {
-    setStatus("ok", "Preview 成功");
-  }
+  if (out.blocked) setStatus("error", `被 Gate 拦截：${(out.reasons || []).join("; ")}`);
+  else setStatus("ok", "Preview 成功");
 }
 
 async function onGenerate() {
@@ -263,13 +289,13 @@ async function onGenerate() {
   });
 
   $("genOut").textContent = JSON.stringify(out, null, 2);
-  setStatus("ok", `Generate 完成，job_id=${out.job_id || "n/a"}`);
+  setStatus("ok", `Generate 完成，job_id=${out.job_id || "na"}`);
 }
 
-/* ---------- 新增：Preset（只写事实+选择，不改变 generate） ---------- */
-
+// ---------- Preset（保持 create/list/use） ----------
 async function presetCreateFromCurrentPayload() {
   if (!currentSchema) throw new Error("请先加载 Schema");
+
   const name = $("presetName").value.trim();
   if (!name) throw new Error("Preset Name 不能为空");
 
@@ -287,11 +313,10 @@ async function presetCreateFromCurrentPayload() {
     body: JSON.stringify(body),
   });
 
-  // 写入 preset_id 供 jobs 查询
   $("presetId").value = out.preset_id || "";
-  setStatus("ok", `Preset 已创建：preset_id=${out.preset_id || "n/a"}`);
+  setStatus("ok", `Preset 已创建：preset_id=${out.preset_id || "na"}`);
 
-  await presetRefreshList(); // 创建后刷新列表
+  await presetRefreshList();
 }
 
 async function presetRefreshList() {
@@ -327,26 +352,80 @@ async function presetRefreshList() {
 }
 
 function presetUseSelected() {
-  const sel = $("presetSelect");
-  const presetId = sel.value;
+  const presetId = $("presetSelect").value;
   if (!presetId) throw new Error("未选择 preset");
 
   $("presetId").value = presetId;
-  setStatus("ok", `已选定 preset_id=${presetId}（仅用于 Jobs 查询）`);
+  setStatus("ok", `已选定 preset_id=${presetId}（用于 Jobs / 更新）`);
 }
 
-/* ---------- 新增：Jobs（只读） ---------- */
+// ✅ 新增：选择下拉时自动写入 presetId（减少误操作）
+function bindPresetSelectAutofill() {
+  $("presetSelect").addEventListener("change", () => {
+    const v = $("presetSelect").value;
+    if (v) $("presetId").value = v;
+  });
+}
 
+// ✅ 新增：GET preset → 回填表单
+async function presetLoadSelectedToForm() {
+  if (!currentSchema) throw new Error("请先加载 Schema");
+
+  const preset_id = $("presetSelect").value || $("presetId").value.trim();
+  if (!preset_id) throw new Error("未选择 preset");
+
+  const url =
+    `${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}` +
+    `&pack_id=${encodeURIComponent(getPackId())}` +
+    `&pack_version=${encodeURIComponent(getPackVersion())}`;
+
+  const out = await httpJson(url, { method: "GET" });
+  const item = out.item;
+  if (!item) throw new Error("preset_get 返回为空");
+
+  // 同步 preset_id / stage（不推进阶段，只是把事实对齐到 UI）
+  $("presetId").value = item.id;
+  setStage(item.stage);
+
+  // 回填表单（只按 schema key 回填）
+  applyPayloadToForm(currentSchema, item.payload || {});
+
+  setStatus("ok", `已加载 preset 到表单：${item.name || item.id}`);
+}
+
+// ✅ 新增：用当前表单 payload 覆盖更新 preset
+async function presetUpdateFromCurrentForm() {
+  if (!currentSchema) throw new Error("请先加载 Schema");
+
+  const preset_id = $("presetId").value.trim() || $("presetSelect").value;
+  if (!preset_id) throw new Error("preset_id 为空（先选择/加载 preset）");
+
+  const body = {
+    pack_id: getPackId(),
+    pack_version: getPackVersion(),
+    stage: getStage(), // 事实：由你手动选择
+    payload: collectPayload(currentSchema), // 事实：覆盖写入
+  };
+
+  const out = await httpJson(`${apiBase()}/preset/update/${encodeURIComponent(preset_id)}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  if (!out.ok) throw new Error("preset_update 未返回 ok");
+
+  setStatus("ok", `Preset 已更新：preset_id=${preset_id}`);
+  await presetRefreshList();
+}
+
+// ---------- Jobs（只读） ----------
 function buildJobsStatsUrl(presetId) {
   return `${apiBase()}/jobs/stats_by_preset?preset_id=${encodeURIComponent(presetId)}`;
 }
-
 function buildJobsByPresetUrl(presetId, limit = 20) {
   return `${apiBase()}/jobs/by_preset?preset_id=${encodeURIComponent(presetId)}&limit=${encodeURIComponent(limit)}`;
 }
-
 function buildJobGetUrl(jobId) {
-  // 你 worker 当前支持 id=...
   return `${apiBase()}/jobs/get?id=${encodeURIComponent(jobId)}`;
 }
 
@@ -361,31 +440,33 @@ function renderJobsTable(items) {
     return;
   }
 
-  const rows = items.map((x) => {
-    const id = escapeHtml(x.id);
-    const created = escapeHtml(x.created_at || "");
-    const status = escapeHtml(x.status || "");
-    const err = escapeHtml(x.error || "");
-    return `
-      <tr>
-        <td style="padding:6px; border-top:1px solid #e5e7eb; font-family: ui-monospace, monospace;">
-          <a href="#" data-job="${id}">${id}</a>
-        </td>
-        <td style="padding:6px; border-top:1px solid #e5e7eb;">${created}</td>
-        <td style="padding:6px; border-top:1px solid #e5e7eb;">${status}</td>
-        <td style="padding:6px; border-top:1px solid #e5e7eb;">${err}</td>
-      </tr>
-    `;
-  }).join("");
+  const rows = items
+    .map((x) => {
+      const id = escapeHtml(x.id);
+      const created = escapeHtml(x.created_at || "");
+      const status = escapeHtml(x.status || "");
+      const err = escapeHtml(x.error || "");
+      return `
+        <tr>
+          <td style="padding:6px;border-top:1px solid #e5e7eb;font-family:ui-monospace,monospace;">
+            <a href="#" data-job="${id}">${id}</a>
+          </td>
+          <td style="padding:6px;border-top:1px solid #e5e7eb;">${created}</td>
+          <td style="padding:6px;border-top:1px solid #e5e7eb;">${status}</td>
+          <td style="padding:6px;border-top:1px solid #e5e7eb;">${err}</td>
+        </tr>
+      `;
+    })
+    .join("");
 
   host.innerHTML = `
-    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
       <thead>
         <tr>
-          <th style="text-align:left; padding:6px;">job_id</th>
-          <th style="text-align:left; padding:6px;">created_at</th>
-          <th style="text-align:left; padding:6px;">status</th>
-          <th style="text-align:left; padding:6px;">error</th>
+          <th style="text-align:left;padding:6px;">job_id</th>
+          <th style="text-align:left;padding:6px;">created_at</th>
+          <th style="text-align:left;padding:6px;">status</th>
+          <th style="text-align:left;padding:6px;">error</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -406,42 +487,66 @@ async function loadJobDetail(jobId) {
   $("jobDetail").textContent = JSON.stringify(out, null, 2);
 }
 
-async function onJobsStats() {
-  const presetId = $("presetId").value.trim();
+function getEffectivePresetIdOrThrow() {
+  let presetId = $("presetId").value.trim();
+  if (!presetId) {
+    const sel = $("presetSelect").value;
+    if (sel) {
+      $("presetId").value = sel;
+      presetId = sel;
+    }
+  }
   if (!presetId) throw new Error("preset_id 为空（先创建/选择 preset）");
+  return presetId;
+}
 
+async function onJobsStats() {
+  const presetId = getEffectivePresetIdOrThrow();
   const out = await httpJson(buildJobsStatsUrl(presetId), { method: "GET" });
   renderJobsStats(out);
   setStatus("ok", "Jobs 统计已刷新");
 }
 
 async function onJobsList() {
-  const presetId = $("presetId").value.trim();
-  if (!presetId) throw new Error("preset_id 为空（先创建/选择 preset）");
-
+  const presetId = getEffectivePresetIdOrThrow();
   const out = await httpJson(buildJobsByPresetUrl(presetId, 20), { method: "GET" });
   renderJobsTable(out.items || []);
   setStatus("ok", "Jobs 列表已刷新");
 }
 
-/* ---------- 事件绑定 ---------- */
+// ---------- 事件绑定 ----------
+function bindEvents() {
+  $("btnLoad").addEventListener("click", () => loadSchema().catch(showError));
+  $("btnPreview").addEventListener("click", () => previewPrompt().catch(showError));
+  $("btnGenerate").addEventListener("click", () => onGenerate().catch(showError));
 
-$("btnLoad").addEventListener("click", () => loadSchema().catch(showError));
-$("btnPreview").addEventListener("click", () => previewPrompt().catch(showError));
-$("btnGenerate").addEventListener("click", () => onGenerate().catch(showError));
+  $("btnPresetCreate").addEventListener("click", () => presetCreateFromCurrentPayload().catch(showError));
+  $("btnPresetRefresh").addEventListener("click", () => presetRefreshList().catch(showError));
+  $("btnPresetUse").addEventListener("click", () => {
+    try {
+      presetUseSelected();
+    } catch (e) {
+      showError(e);
+    }
+  });
 
-$("btnPresetCreate").addEventListener("click", () => presetCreateFromCurrentPayload().catch(showError));
-$("btnPresetRefresh").addEventListener("click", () => presetRefreshList().catch(showError));
-$("btnPresetUse").addEventListener("click", () => {
-  try { presetUseSelected(); } catch (e) { showError(e); }
-});
+  // ✅ 新增按钮
+  $("btnPresetLoadToForm").addEventListener("click", () => presetLoadSelectedToForm().catch(showError));
+  $("btnPresetUpdateFromForm").addEventListener("click", () => presetUpdateFromCurrentForm().catch(showError));
 
-$("btnJobsStats").addEventListener("click", () => onJobsStats().catch(showError));
-$("btnJobsList").addEventListener("click", () => onJobsList().catch(showError));
+  $("btnJobsStats").addEventListener("click", () => onJobsStats().catch(showError));
+  $("btnJobsList").addEventListener("click", () => onJobsList().catch(showError));
 
-/* ---------- 默认值 ---------- */
+  bindPresetSelectAutofill();
+}
 
-$("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
-$("packId").value = "xhs";
-$("packVer").value = "v1.0.0";
-$("stage").value = "S0";
+// ---------- 默认值 ----------
+function setDefaults() {
+  $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
+  $("packId").value = "xhs";
+  $("packVer").value = "v1.0.0";
+  $("stage").value = "S0";
+}
+
+setDefaults();
+bindEvents();
