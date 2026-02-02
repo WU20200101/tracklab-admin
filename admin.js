@@ -171,15 +171,18 @@ function renderSchema(schema) {
 function collectPayload(schema) {
   const payload = {};
   const missing = [];
+  const stage = getStage(); // ✅ 缓存一次
 
   schema.groups.forEach((g) => {
     (g.fields || []).forEach((f) => {
       if (f.type === "enum") {
         const sel = document.querySelector(`select[name="${CSS.escape(f.key)}"]`);
         const v = sel ? sel.value : "";
+
         const reqStages = Array.isArray(f.required_stages) ? f.required_stages : null;
-const isRequiredNow = !!f.required && (!reqStages || reqStages.includes(getStage()));
-if (isRequiredNow && !v) missing.push(f.key);
+        const isRequiredNow = !!f.required && (!reqStages || reqStages.includes(stage));
+        if (isRequiredNow && !v) missing.push(f.key);
+
         if (v) payload[f.key] = v;
       }
 
@@ -189,8 +192,8 @@ if (isRequiredNow && !v) missing.push(f.key);
         ).map((x) => x.value);
 
         const reqStages = Array.isArray(f.required_stages) ? f.required_stages : null;
-const isRequiredNow = !!f.required && (!reqStages || reqStages.includes(getStage()));
-if (isRequiredNow && checked.length === 0) missing.push(f.key);
+        const isRequiredNow = !!f.required && (!reqStages || reqStages.includes(stage));
+        if (isRequiredNow && checked.length === 0) missing.push(f.key);
 
         if (checked.length) payload[f.key] = checked;
       }
@@ -200,6 +203,7 @@ if (isRequiredNow && checked.length === 0) missing.push(f.key);
   if (missing.length) throw new Error(`必填字段未填写：${missing.join(", ")}`);
   return payload;
 }
+
 
 // ---------- 新增：按 stage 锁定字段（只禁用，不改值，不写策略） ----------
 function applyStageLock(schema, stage) {
@@ -596,6 +600,7 @@ function setDefaults() {
 
 setDefaults();
 bindEvents();
+
 
 
 
