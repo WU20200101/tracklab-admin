@@ -12,142 +12,13 @@
  */
 
 const $ = (id) => document.getElementById(id);
-
-// Safe DOM helpers for multi-index.html usage (public/self):
-const hasEl = (id) => !!document.getElementById(id);
-const onEl = (id, evt, fn) => { const el = $(id); if (el) el.addEventListener(evt, fn); };
-const setText = (id, text) => { const el = $(id); if (el) el.textContent = text; };
-const setVal = (id, v) => { const el = $(id); if (el) el.value = (v === null || v === undefined) ? "" : String(v); };
-
-// Optional: page mode switch via <meta name="tracklab-mode" content="public|self">
-function getMode() {
-  return document.querySelector('meta[name="tracklab-mode"]')?.content || "self";
-}
-function isPublicMode() { return getMode() === "public"; }
-
 let currentSchema = null;
 
 // ---------- 通用工具 ----------
 function showError(e) {
   console.error(e);
-  const msg = e?.message || String(e);
-  setStatus("error", msg);
-  // 关键：把错误也写到 Feedback 卡片里，避免“无返回”的错觉
-  setFeedbackOut({ ok: false, error: msg });
+  setStatus("error", e?.message || String(e));
 }
-
-function setFeedbackOut(objOrText) {
-  const el = document.getElementById("feedbackOut");
-  if (!el) return;
-  if (typeof objOrText === "string") {
-    el.textContent = objOrText;
-  } else {
-    el.textContent = JSON.stringify(objOrText, null, 2);
-  }
-}
-
-function renderEvaluationSummary(resp) {
-  const badge = document.getElementById("evalBadge");
-  const a = document.getElementById("evalAction");
-  const fs = document.getElementById("evalFromStage");
-  const ts = document.getElementById("evalToStage");
-  const rid = document.getElementById("evalRuleId");
-  const win = document.getElementById("evalWindow");
-  const m = document.getElementById("evalMetrics");
-
-  if (!badge || !a || !fs || !ts || !rid || !win || !m) return;
-
-  const ev = resp?.evaluation || {};
-  const action = ev.action || "none";
-
-  a.value = action;
-  fs.value = ev.from_stage || "";
-  ts.value = ev.to_stage || "";
-  rid.value = ev.rule_id || "";
-  win.textContent = ev.window
-  ? JSON.stringify(ev.window, null, 2)
-  : "(empty)";
-
-  const metrics = ev.metrics ?? null;
-  m.textContent = metrics ? JSON.stringify(metrics, null, 2) : "(empty)";
-
-  // 视觉徽标（不引导，不解释）
-  if (action === "advance") {
-    badge.textContent = `✅ ADVANCE：${ev.from_stage || ""} → ${ev.to_stage || ""}`;
-    badge.className = "ok";
-  } else if (action === "disable") {
-    badge.textContent = `⛔ DISABLE：${ev.from_stage || ""}（rule=${ev.rule_id || "n/a"}）`;
-    badge.className = "error";
-  } else {
-    badge.textContent = `… CONTINUE：继续观察（stage=${resp?.stage || ev.from_stage || ""}）`;
-    badge.className = "muted";
-  }
-}
-
-// ---------- Preset Snapshot（只读状态总览；不改 worker） ----------
-async function fetchPresetDetailForSnapshot(presetId) {
-  if (!presetId) return null;
-
-  const url =
-    `${apiBase()}/preset/get?preset_id=${encodeURIComponent(presetId)}` +
-    `&pack_id=${encodeURIComponent(getPackId())}` +
-    `&pack_version=${encodeURIComponent(getPackVersion())}`;
-
-  const out = await httpJson(url, { method: "GET" });
-  return out?.item || out?.preset || null;
-}
-
-function renderPresetSnapshot(preset) {
-  const hasAnyEl =
-    document.getElementById("snapPresetId") ||
-    document.getElementById("snapRaw") ||
-    document.getElementById("presetStageEnteredAt");
-  if (!hasAnyEl) return; // 未安装 Snapshot 面板则静默退出
-
-  const setVal = (id, v) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.value = (v === null || v === undefined) ? "" : String(v);
-  };
-
-  setVal("snapPresetId", preset?.id || "");
-  setVal("snapEnabled", preset?.enabled);
-  setVal("snapStage", preset?.stage || "");
-  setVal("presetStageEnteredAt", preset?.stage_entered_at || "");
-
-  setVal("snapDisabledReason", preset?.disabled_reason || "");
-  setVal("snapDisabledAt", preset?.disabled_at || "");
-
-  const baseline = {
-    posts: preset?.baseline_posts_total ?? null,
-    views: preset?.baseline_views_total ?? null,
-    likes: preset?.baseline_likes_total ?? null,
-    collects: preset?.baseline_collects_total ?? null,
-    comments: preset?.baseline_comments_total ?? null,
-    dm_inbound: preset?.baseline_dm_inbound_total ?? null,
-  };
-
-  const baselineEl = document.getElementById("snapBaseline");
-  if (baselineEl) {
-    const hasAny = Object.values(baseline).some(v => v !== null);
-    baselineEl.textContent = hasAny ? JSON.stringify(baseline, null, 2) : "(empty)";
-  }
-
-  const rawEl = document.getElementById("snapRaw");
-  if (rawEl) rawEl.textContent = preset ? JSON.stringify(preset, null, 2) : "(empty)";
-}
-
-async function refreshPresetSnapshot(presetIdMaybe) {
-  try {
-    const presetId = presetIdMaybe || getEffectivePresetIdOrThrow();
-    const p = await fetchPresetDetailForSnapshot(presetId);
-    renderPresetSnapshot(p);
-  } catch {}
-}
-// ---------- Preset Snapshot end ----------
-
-
-
 
 function escapeHtml(s) {
   return String(s)
@@ -160,7 +31,6 @@ function escapeHtml(s) {
 
 function setStatus(type, msg) {
   const el = $("status");
-  if (!el) return;
   if (!msg) {
     el.innerHTML = "";
     return;
@@ -401,11 +271,11 @@ function applyPayloadToForm(schema, payload) {
 // ---------- 原有行为（保持） ----------
 async function loadSchema() {
   setStatus("", "");
-  setText("previewOut", "(empty)");
-  setText("genOut", "(empty)");
-  setText("jobDetail", "(empty)");
-  setText("jobsTable", "(empty)");
-  setText("jobsStats", "(empty)");
+  $("previewOut").textContent = "(empty)";
+  $("genOut").textContent = "(empty)";
+  $("jobDetail").textContent = "(empty)";
+  $("jobsTable").textContent = "(empty)";
+  $("jobsStats").textContent = "(empty)";
 
   const url = `${apiBase()}/pack/${getPackId()}/${getPackVersion()}`;
   setStatus("muted", `GET ${url}`);
@@ -423,27 +293,35 @@ async function previewPrompt() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
   setStatus("", "");
-  const payload = collectPayload(currentSchema);
-
-  // 同 generate：从“当前 Preset ID（用于 Jobs / 更新）”取
-  // 如果你的 input id 不是 presetId，把这里改成真实 id
+  // ✅ 强制：Preview 必须通过 Preset（不允许用当前表单直接 preview）
   const preset_id = (document.getElementById("presetId")?.value || "").trim();
-  if (!preset_id) throw new Error("missing_preset_id（请先选择/加载一个 Preset）");
+  if (!preset_id) throw new Error("missing_preset_id（必须先选择/加载一个 Preset）");
 
-  const body = {
-    pack_id: getPackId(),
-    pack_version: getPackVersion(),
-    stage: getStage(),
-    preset_id,
-    payload,
-  };
+  // 先读 preset 的事实：stage + payload
+  const pack_id = getPackId();
+  const pack_version = getPackVersion();
+  const presetGetUrl =
+    `${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}` +
+    `&pack_id=${encodeURIComponent(pack_id)}` +
+    `&pack_version=${encodeURIComponent(pack_version)}`;
 
+  const presetOut = await httpJson(presetGetUrl, { method: "GET" });
+  const item = presetOut.item;
+  if (!item) throw new Error("preset_get 返回为空（无法预览）");
+  if (!item.stage || !item.payload) throw new Error("Preset 缺少 stage/payload（无法预览）");
+
+  // 注意：/preview 合约仍然是 stage + payload（worker 不关心 preset 语义）
   const out = await httpJson(`${apiBase()}/preview`, {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      pack_id,
+      pack_version,
+      stage: item.stage,
+      payload: item.payload,
+    }),
   });
 
-  setText("previewOut", JSON.stringify(out, null, 2));
+  $("previewOut").textContent = JSON.stringify(out, null, 2);
 
   if (out.blocked) setStatus("error", `被 Gate 拦截：${(out.reasons || []).join("; ")}`);
   else setStatus("ok", "Preview 成功");
@@ -453,18 +331,14 @@ async function previewPrompt() {
 async function onGenerate() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
-  // preset_id：从 UI 的“当前 Preset ID（用于 Jobs / 更新）”输入框取
-  // 你截图里已经有这个输入框；这里假设它的 id 是 "presetId"（如果不同，把 id 改成你的实际值）
+  // ✅ 强制：Generate 必须通过 Preset（不允许 stage+payload 直发 generate）
   const preset_id = (document.getElementById("presetId")?.value || "").trim();
-  if (!preset_id) throw new Error("missing_preset_id（请先选择/加载一个 Preset）");
+  if (!preset_id) throw new Error("missing_preset_id（必须先选择/加载一个 Preset）");
 
-  // ✅ 保持现有生成方式：stage + payload（只多带一个事实字段 preset_id）
   const body = {
     pack_id: getPackId(),
     pack_version: getPackVersion(),
-    stage: getStage(),
     preset_id,
-    payload: collectPayload(currentSchema),
   };
 
   const out = await httpJson(`${apiBase()}/generate`, {
@@ -472,7 +346,7 @@ async function onGenerate() {
     body: JSON.stringify(body),
   });
 
-  setText("genOut", JSON.stringify(out, null, 2));
+  $("genOut").textContent = JSON.stringify(out, null, 2);
   setStatus("ok", `Generate 完成，job_id=${out.job_id || "na"}`);
 }
 
@@ -498,7 +372,7 @@ async function presetCreateFromCurrentPayload() {
     body: JSON.stringify(body),
   });
 
-  setVal("presetId", out.preset_id || "");
+  $("presetId").value = out.preset_id || "";
   setStatus("ok", `Preset 已创建：preset_id=${out.preset_id || "na"}`);
 
   await presetRefreshList();
@@ -519,7 +393,6 @@ async function presetRefreshList() {
   const items = out.items || [];
 
   const sel = $("presetSelect");
-  if (!sel) { setStatus("warn", "presetSelect 不存在：该页面可能是 public 版，已跳过 Preset 列表渲染"); return; }
   sel.innerHTML = "";
 
   const empty = document.createElement("option");
@@ -538,21 +411,18 @@ async function presetRefreshList() {
 }
 
 function presetUseSelected() {
-  const sel = $("presetSelect");
-  const presetId = sel ? sel.value : "";
+  const presetId = $("presetSelect").value;
   if (!presetId) throw new Error("未选择 preset");
 
-  setVal("presetId", presetId);
+  $("presetId").value = presetId;
   setStatus("ok", `已选定 preset_id=${presetId}（用于 Jobs / 更新）`);
 }
 
 // ✅ 新增：选择下拉时自动写入 presetId（减少误操作）
 function bindPresetSelectAutofill() {
-  const sel = $("presetSelect");
-  if (!sel) return;
-  sel.addEventListener("change", () => {
-    const v = sel.value;
-    if (v) setVal("presetId", v);
+  $("presetSelect").addEventListener("change", () => {
+    const v = $("presetSelect").value;
+    if (v) $("presetId").value = v;
   });
 }
 
@@ -561,7 +431,7 @@ function bindPresetSelectAutofill() {
 async function presetLoadSelectedToForm() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
-  const preset_id = ($("presetSelect")?.value || $("presetId")?.value || "").trim();
+  const preset_id = $("presetSelect").value || $("presetId").value.trim();
   if (!preset_id) throw new Error("未选择 preset");
 
   const url =
@@ -574,7 +444,7 @@ async function presetLoadSelectedToForm() {
   if (!item) throw new Error("preset_get 返回为空");
 
   // 同步 preset_id / stage（不推进阶段，只是把事实对齐到 UI）
-  setVal("presetId", item.id);
+  $("presetId").value = item.id;
   setStage(item.stage);
 
   // 回填表单（只按 schema key 回填）
@@ -582,7 +452,6 @@ async function presetLoadSelectedToForm() {
   applyStageLock(currentSchema, getStage());
 
   setStatus("ok", `已加载 preset 到表单：${item.name || item.id}`);
-  await refreshPresetSnapshot(item.id);
 }
 
 
@@ -591,7 +460,7 @@ async function presetLoadSelectedToForm() {
 async function presetUpdateFromCurrentForm() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
-  const preset_id = ($("presetId")?.value || "").trim() || $("presetSelect")?.value;
+  const preset_id = $("presetId").value.trim() || $("presetSelect").value;
   if (!preset_id) throw new Error("preset_id 为空（先选择/加载 preset）");
 
   const body = {
@@ -610,7 +479,6 @@ async function presetUpdateFromCurrentForm() {
 
   setStatus("ok", `Preset 已更新：preset_id=${preset_id}`);
   await presetRefreshList();
-  await refreshPresetSnapshot(preset_id);
 }
 
 // ---------- Jobs（只读） ----------
@@ -625,12 +493,11 @@ function buildJobGetUrl(jobId) {
 }
 
 function renderJobsStats(stats) {
-  setText("jobsStats", `total=${stats.total}, generated=${stats.generated}, failed=${stats.failed}`);
+  $("jobsStats").textContent = `total=${stats.total}, generated=${stats.generated}, failed=${stats.failed}`;
 }
 
 function renderJobsTable(items) {
   const host = $("jobsTable");
-  if (!host) return;
   if (!items || items.length === 0) {
     host.textContent = "(empty)";
     return;
@@ -680,15 +547,15 @@ function renderJobsTable(items) {
 
 async function loadJobDetail(jobId) {
   const out = await httpJson(buildJobGetUrl(jobId), { method: "GET" });
-  setText("jobDetail", JSON.stringify(out, null, 2));
+  $("jobDetail").textContent = JSON.stringify(out, null, 2);
 }
 
 function getEffectivePresetIdOrThrow() {
-  let presetId = ($("presetId")?.value || "").trim();
+  let presetId = $("presetId").value.trim();
   if (!presetId) {
-    const sel = $("presetSelect")?.value;
+    const sel = $("presetSelect").value;
     if (sel) {
-      setVal("presetId", sel);
+      $("presetId").value = sel;
       presetId = sel;
     }
   }
@@ -725,242 +592,48 @@ async function onJobsList() {
   }
 }
 
-// ---------- Feedback（录入 + 自动评估：只展示事实） ----------
-function todayYmdLocal() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-
-// ---------- Feedback 人性保护（前端护栏；不改 worker） ----------
-function setFbWarn(text) {
-  const el = document.getElementById("fbWarn");
-  if (!el) return;
-  el.textContent = text || "";
-}
-
-function ensureFeedbackDateDefault() {
-  const el = document.getElementById("fbDate");
-  if (el && !el.value) el.value = todayYmdLocal();
-}
-
-function parseYmd(s) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
-// 软校验：如果未来你在“Preset 状态总览”里加了 presetStageEnteredAt（ISO），这里会自动提示口径风险
-function softValidateFeedbackDateAgainstStage() {
-  const dateStr = (document.getElementById("fbDate")?.value || "").trim();
-  const dt = parseYmd(dateStr);
-  if (!dt) {
-    setFbWarn("⚠ Date 格式必须为 YYYY-MM-DD。");
-    return false;
-  }
-
-  const enteredIso = (document.getElementById("presetStageEnteredAt")?.value || "").trim();
-  if (!enteredIso) { setFbWarn(""); return true; }
-
-  const enteredDate = enteredIso.slice(0, 10);
-  const et = parseYmd(enteredDate);
-  if (!et) { setFbWarn(""); return true; }
-
-  if (dt < et) {
-    setFbWarn(`⚠ Date 早于进入当前 Stage 的日期（${enteredDate}）。若你填的是累计总量，这通常意味着口径不一致。`);
-    return true; // 软提示，不阻断
-  }
-
-  setFbWarn("");
-  return true;
-}
-
-// 硬校验：非负整数；异常直接阻断提交（避免“静默归零”造成伪数据）
-function readNonNegIntStrict(id, label) {
-  const raw = (document.getElementById(id)?.value ?? "").toString().trim();
-  if (raw === "") return 0;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) throw new Error(`${label || id} 必须是数字`);
-  if (n < 0) throw new Error(`${label || id} 不能为负数`);
-  return Math.trunc(n);
-}
-
-// 防呆：当数值整体很小，提示一次“你填的是累计总量吗”
-function maybeConfirmCumulative(totals) {
-  const small =
-    (totals.views ?? 0) <= 50 &&
-    (totals.likes ?? 0) <= 10 &&
-    (totals.collects ?? 0) <= 5 &&
-    (totals.comments ?? 0) <= 5 &&
-    (totals.dm_inbound ?? 0) <= 2;
-
-  if (!small) return true;
-
-  return window.confirm(
-    "确认：你填写的是“累计总量”（截止该日期），不是当天新增？\n\n若只是当天数据，请先把总量累加后再提交。"
-  );
-}
-
-function toNonNegIntFromInput(id) {
-  const raw = (document.getElementById(id)?.value ?? "").toString().trim();
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return 0;
-  return Math.trunc(n);
-}
-
-function getFeedbackDateOrThrow() {
-  const v = (document.getElementById("fbDate")?.value || "").trim();
-  if (!v) throw new Error("feedback_date 不能为空");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error("feedback_date 格式必须为 YYYY-MM-DD");
-  return v;
-}
-
-function buildFeedbackUpsertBody(preset_id) {
-  const date = getFeedbackDateOrThrow();
-  const note = (document.getElementById("fbNote")?.value || "").trim() || null;
-
-  return {
-    pack_id: getPackId(),
-    pack_version: getPackVersion(),
-    preset_id,
-    date,
-    totals: {
-      posts: readNonNegIntStrict("fbPosts", "Posts（累计）"),
-      views: readNonNegIntStrict("fbViews", "Views（累计）"),
-      likes: readNonNegIntStrict("fbLikes", "Likes（累计）"),
-      collects: readNonNegIntStrict("fbCollects", "Collects（累计）"),
-      comments: readNonNegIntStrict("fbComments", "Comments（累计）"),
-      dm_inbound: readNonNegIntStrict("fbDmInbound", "DM Inbound（累计）"),
-    },
-    note,
-  };
-}
-
-function applyEvaluationSideEffects(resp) {
-  // resp: { ok, preset_id, stage, evaluation:{action,...} }
-  const evalInfo = resp?.evaluation || {};
-  const action = evalInfo.action || "none";
-
-  // 1) advance：同步 stage 下拉 + 刷新 preset 列表（stage 变了，list 过滤会变化）
-  if (action === "advance") {
-    if (resp.stage) setStage(resp.stage);
-  }
-
-  // 2) disable：清空当前 preset_id（因为 enabled=1 的 list 里会消失）
-  if (action === "disable") {
-        setVal("presetId", "");
-    setVal("presetSelect", "");
-  }
-
-  // 3) 无论如何：刷新 preset 列表（事实对齐）
-  return action;
-}
-
-async function onFeedbackUpsert() {
-  ensureFeedbackDateDefault();
-  softValidateFeedbackDateAgainstStage();
-
-  const presetId = getEffectivePresetIdOrThrow();
-  const body = buildFeedbackUpsertBody(presetId);
-
-  if (!maybeConfirmCumulative(body.totals)) return;
-
-  setStatus("info", "提交反馈中…");
-  setFeedbackOut({ ok: true, status: "submitting", body });
-
-  const out = await httpJson(`${apiBase()}/feedback/upsert`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-
-  setFeedbackOut(out);
-  renderEvaluationSummary(out);
-
-  const action = applyEvaluationSideEffects(out);
-  await presetRefreshList();
-  await refreshPresetSnapshot(out.preset_id || presetId);
-
-  if (action === "advance") {
-    try {
-            setVal("presetId", out.preset_id || presetId);
-      await presetLoadSelectedToForm();
-    } catch {}
-  }
-
-  setStatus("ok", `Feedback 已写入，evaluation.action=${action}`);
-}
-
-
-
-function bindFeedbackDefaults() {
-  const d = document.getElementById("fbDate");
-  if (d && !d.value) d.value = todayYmdLocal();
-}
-
-async function onFeedbackFillFromStats() {
-  const presetId = getEffectivePresetIdOrThrow();
-
-  setStatus("info", "获取 Jobs stats 中…");
-  setFeedbackOut({ ok: true, status: "loading_jobs_stats", preset_id: presetId });
-
-  const stats = await httpJson(buildJobsStatsUrl(presetId), { method: "GET" });
-
-  // 不把 stats 硬填到 Views/Likes（避免伪数据），但要可视化返回
-  setFeedbackOut({ ok: true, jobs_stats: stats });
-
-  setStatus("ok", `已获取 stats：total=${stats.total}, generated=${stats.generated}, failed=${stats.failed}`);
-}
-
 
 // ---------- 事件绑定 ----------
 function bindEvents() {
-  onEl("btnLoad", "click", () => loadSchema().catch(showError));
-  onEl("btnPreview", "click", () => previewPrompt().catch(showError));
-  onEl("btnGenerate", "click", () => onGenerate().catch(showError));
+  $("btnLoad").addEventListener("click", () => loadSchema().catch(showError));
+  $("btnPreview").addEventListener("click", () => previewPrompt().catch(showError));
+  $("btnGenerate").addEventListener("click", () => onGenerate().catch(showError));
 
-  // Feedback
-  onEl("btnFeedbackUpsert", "click", () => onFeedbackUpsert().catch(showError));
-  onEl("btnFeedbackFillFromStats", "click", () => onFeedbackFillFromStats().catch(showError));
-
-  // Preset
-  onEl("btnPresetCreate", "click", () => presetCreateFromCurrentPayload().catch(showError));
-  onEl("btnPresetRefresh", "click", () => presetRefreshList().catch(showError));
-  onEl("btnPresetUse", "click", () => {
-    try { presetUseSelected(); } catch (e) { showError(e); }
+  $("btnPresetCreate").addEventListener("click", () => presetCreateFromCurrentPayload().catch(showError));
+  $("btnPresetRefresh").addEventListener("click", () => presetRefreshList().catch(showError));
+  $("btnPresetUse").addEventListener("click", () => {
+    try {
+      presetUseSelected();
+    } catch (e) {
+      showError(e);
+    }
   });
-  onEl("btnPresetLoadToForm", "click", () => presetLoadSelectedToForm().catch(showError));
-  onEl("btnPresetUpdateFromForm", "click", () => presetUpdateFromCurrentForm().catch(showError));
 
-  // Jobs（public 版可不提供这些按钮）
-  onEl("btnJobsStats", "click", () => onJobsStats().catch(showError));
-  onEl("btnJobsList", "click", () => onJobsList().catch(showError));
+  // ✅ 新增按钮
+  $("btnPresetLoadToForm").addEventListener("click", () => presetLoadSelectedToForm().catch(showError));
+  $("btnPresetUpdateFromForm").addEventListener("click", () => presetUpdateFromCurrentForm().catch(showError));
+
+  $("btnJobsStats").addEventListener("click", () => onJobsStats().catch(showError));
+  $("btnJobsList").addEventListener("click", () => onJobsList().catch(showError));
 
   bindPresetSelectAutofill();
 
-  onEl("stage", "change", () => { if (currentSchema) applyStageLock(currentSchema, getStage()); });
+  $("stage").addEventListener("change", () => {
+  if (currentSchema) applyStageLock(currentSchema, getStage());
+  });
+
 }
 
 // ---------- 默认值 ----------
-
 function setDefaults() {
-  // public/self 都可复用：不存在的 input 直接跳过
-  setVal("apiBase", "https://tracklab-api.wuxiaofei1985.workers.dev");
-  setVal("packId", "xhs");
-  setVal("packVer", "v1.0.0");
-  setVal("stage", "S0");
+  $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
+  $("packId").value = "xhs";
+  $("packVer").value = "v1.0.0";
+  $("stage").value = "S0";
 }
 
 setDefaults();
 bindEvents();
-bindFeedbackDefaults();
-ensureFeedbackDateDefault();
-
-
-
-
 
 
 
