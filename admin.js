@@ -54,7 +54,7 @@ async function httpJson(url, options = {}) {
   } catch {}
 
   if (!res.ok) {
-    const msg = (data && (data.error || data.message)) || text || `HTTP ${res.status}`;
+    const msg = (data && (data.message || data.error)) || text || `HTTP ${res.status}`;
     throw new Error(msg);
   }
 
@@ -293,50 +293,31 @@ async function previewPrompt() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
   setStatus("", "");
-
   // ✅ 强制：Preview 必须通过 Preset（不允许用当前表单直接 preview）
-  const preset_id = ($("presetId")?.value || "").trim() || ($("presetSelect")?.value || "").trim();
+  const preset_id = (document.getElementById("presetId")?.value || "").trim();
   if (!preset_id) throw new Error("missing_preset_id（必须先选择/加载一个 Preset）");
 
+  // 先读 preset 的事实：stage + payload
   const pack_id = getPackId();
   const pack_version = getPackVersion();
-
-  // 先读 preset 的事实：stage + payload
   const presetGetUrl =
     `${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}` +
     `&pack_id=${encodeURIComponent(pack_id)}` +
     `&pack_version=${encodeURIComponent(pack_version)}`;
 
   const presetOut = await httpJson(presetGetUrl, { method: "GET" });
-  const item = presetOut?.item || presetOut?.preset || null;
+  const item = presetOut.item;
   if (!item) throw new Error("preset_get 返回为空（无法预览）");
+  if (!item.stage || !item.payload) throw new Error("Preset 缺少 stage/payload（无法预览）");
 
-  const stage = item.stage || item.effective_stage || item.current_stage;
-  if (!stage) throw new Error("Preset 缺少 stage（无法预览）");
-
-  // payload 兼容：object / string / payload_json
-  let payload = item.payload ?? null;
-  if (!payload && item.payload_json) payload = item.payload_json;
-
-  if (typeof payload === "string") {
-    try {
-      payload = JSON.parse(payload);
-    } catch {
-      throw new Error("Preset payload_json 不是合法 JSON（无法预览）");
-    }
-  }
-
-  if (!payload || typeof payload !== "object") {
-    throw new Error("Preset 缺少 payload（无法预览）");
-  }
-
+  // 注意：/preview 合约仍然是 stage + payload（worker 不关心 preset 语义）
   const out = await httpJson(`${apiBase()}/preview`, {
     method: "POST",
     body: JSON.stringify({
       pack_id,
       pack_version,
-      stage,
-      payload,
+      stage: item.stage,
+      payload: item.payload,
     }),
   });
 
@@ -347,13 +328,11 @@ async function previewPrompt() {
 }
 
 
-
-
 async function onGenerate() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
   // ✅ 强制：Generate 必须通过 Preset（不允许 stage+payload 直发 generate）
-  const preset_id = ($("presetId")?.value || "").trim() || ($("presetSelect")?.value || "").trim();
+  const preset_id = (document.getElementById("presetId")?.value || "").trim();
   if (!preset_id) throw new Error("missing_preset_id（必须先选择/加载一个 Preset）");
 
   const body = {
@@ -370,8 +349,6 @@ async function onGenerate() {
   $("genOut").textContent = JSON.stringify(out, null, 2);
   setStatus("ok", `Generate 完成，job_id=${out.job_id || "na"}`);
 }
-
-
 
 
 // ---------- Preset（保持 create/list/use） ----------
