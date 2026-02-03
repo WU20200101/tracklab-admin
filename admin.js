@@ -588,12 +588,129 @@ async function onJobsList() {
   }
 }
 
+// ---------- Feedback（录入 + 自动评估：只展示事实） ----------
+function todayYmdLocal() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function toNonNegIntFromInput(id) {
+  const raw = (document.getElementById(id)?.value ?? "").toString().trim();
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.trunc(n);
+}
+
+function getFeedbackDateOrThrow() {
+  const v = (document.getElementById("fbDate")?.value || "").trim();
+  if (!v) throw new Error("feedback_date 不能为空");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error("feedback_date 格式必须为 YYYY-MM-DD");
+  return v;
+}
+
+function buildFeedbackUpsertBody(preset_id) {
+  const date = getFeedbackDateOrThrow();
+  const note = (document.getElementById("fbNote")?.value || "").trim() || null;
+
+  return {
+    pack_id: getPackId(),
+    pack_version: getPackVersion(),
+    preset_id,
+    date,
+    totals: {
+      posts: toNonNegIntFromInput("fbPosts"),
+      views: toNonNegIntFromInput("fbViews"),
+      likes: toNonNegIntFromInput("fbLikes"),
+      collects: toNonNegIntFromInput("fbCollects"),
+      comments: toNonNegIntFromInput("fbComments"),
+      dm_inbound: toNonNegIntFromInput("fbDmInbound"),
+    },
+    note,
+  };
+}
+
+function applyEvaluationSideEffects(resp) {
+  // resp: { ok, preset_id, stage, evaluation:{action,...} }
+  const evalInfo = resp?.evaluation || {};
+  const action = evalInfo.action || "none";
+
+  // 1) advance：同步 stage 下拉 + 刷新 preset 列表（stage 变了，list 过滤会变化）
+  if (action === "advance") {
+    if (resp.stage) setStage(resp.stage);
+  }
+
+  // 2) disable：清空当前 preset_id（因为 enabled=1 的 list 里会消失）
+  if (action === "disable") {
+    $("presetId").value = "";
+    $("presetSelect").value = "";
+  }
+
+  // 3) 无论如何：刷新 preset 列表（事实对齐）
+  return action;
+}
+
+async function onFeedbackUpsert() {
+  const presetId = getEffectivePresetIdOrThrow();
+
+  const body = buildFeedbackUpsertBody(presetId);
+
+  setStatus("info", "提交反馈中…");
+  const out = await httpJson(`${apiBase()}/feedback/upsert`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  // 展示返回（只读）
+  const el = document.getElementById("feedbackOut");
+  if (el) el.textContent = JSON.stringify(out, null, 2);
+
+  const action = applyEvaluationSideEffects(out);
+
+  // 刷新 preset 列表（stage / enabled 可能变化）
+  await presetRefreshList();
+
+  // 若是 advance：可选再把当前 preset 回填到表单（保持 UI 对齐）
+  // 若是 disable：不用回填
+  if (action === "advance") {
+    // 尝试回填当前 preset（如果还可见）
+    try {
+      $("presetId").value = out.preset_id || presetId;
+      await presetLoadSelectedToForm(); // 若 presetSelect 为空也会用 presetId
+    } catch {
+      // 不强制
+    }
+  }
+
+  setStatus("ok", `Feedback 已写入，evaluation.action=${action}`);
+}
+
+function bindFeedbackDefaults() {
+  const d = document.getElementById("fbDate");
+  if (d && !d.value) d.value = todayYmdLocal();
+}
+
+// 可选：你如果希望“用 Jobs 统计填充”为一个快捷键（不是必须）
+async function onFeedbackFillFromStats() {
+  const presetId = getEffectivePresetIdOrThrow();
+  const stats = await httpJson(buildJobsStatsUrl(presetId), { method: "GET" });
+
+  // 这里只做一个“事实填充”的示例：你也可以删掉这个按钮绑定
+  // 例如把 total 当 posts（不推荐），所以默认不写；仅保留接口通路验证
+  setStatus("ok", `已获取 stats：total=${stats.total}, generated=${stats.generated}, failed=${stats.failed}（未写入表单）`);
+}
 
 // ---------- 事件绑定 ----------
 function bindEvents() {
   $("btnLoad").addEventListener("click", () => loadSchema().catch(showError));
   $("btnPreview").addEventListener("click", () => previewPrompt().catch(showError));
   $("btnGenerate").addEventListener("click", () => onGenerate().catch(showError));
+
+    // Feedback
+  $("btnFeedbackUpsert").addEventListener("click", () => onFeedbackUpsert().catch(showError));
+  $("btnFeedbackFillFromStats").addEventListener("click", () => onFeedbackFillFromStats().catch(showError));
 
   $("btnPresetCreate").addEventListener("click", () => presetCreateFromCurrentPayload().catch(showError));
   $("btnPresetRefresh").addEventListener("click", () => presetRefreshList().catch(showError));
@@ -630,6 +747,8 @@ function setDefaults() {
 
 setDefaults();
 bindEvents();
+bindFeedbackDefaults();
+
 
 
 
