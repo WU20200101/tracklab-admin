@@ -181,6 +181,40 @@
 
   <div class="group">
     <h4 style="margin:0 0 10px 0;">Evaluation 返回（只读）</h4>
+    <div class="group">
+  <h4 style="margin:0 0 10px 0;">Evaluation Summary（可视化）</h4>
+
+  <div id="evalBadge" class="muted" style="margin-bottom:10px;">(empty)</div>
+
+  <div class="row">
+    <div>
+      <label>Action</label>
+      <input id="evalAction" disabled />
+    </div>
+    <div>
+      <label>From Stage</label>
+      <input id="evalFromStage" disabled />
+    </div>
+    <div>
+      <label>To Stage</label>
+      <input id="evalToStage" disabled />
+    </div>
+    <div>
+      <label>Rule ID</label>
+      <input id="evalRuleId" disabled />
+    </div>
+    <div>
+      <label>Window</label>
+      <input id="evalWindow" disabled />
+    </div>
+  </div>
+
+  <div class="group">
+    <label>Metrics（只读）</label>
+    <pre id="evalMetrics">(empty)</pre>
+  </div>
+</div>
+
     <pre id="feedbackOut">(empty)</pre>
   </div>
 </div>
@@ -200,3 +234,4 @@
 </body>
 
 </html>
+
