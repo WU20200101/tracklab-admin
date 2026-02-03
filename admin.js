@@ -766,6 +766,78 @@ bindEvents();
   ensureDateDefault();
 })();
 
+// ===== Preset Snapshot hard refresh (never silent) =====
+async function refreshPresetSnapshot() {
+  const elRaw = document.getElementById("snapRawPreset") || document.getElementById("snapshotRaw") || document.getElementById("rawPreset");
+  const writeRaw = (obj) => {
+    if (elRaw) elRaw.textContent = (typeof obj === "string") ? obj : JSON.stringify(obj, null, 2);
+  };
+
+  try {
+    const preset_id =
+      (document.getElementById("presetId")?.value || "").trim() ||
+      (document.getElementById("presetSelect")?.value || "").trim();
+
+    if (!preset_id) {
+      writeRaw({ ok: false, error: "preset_id 为空：先加载/选择一个 preset" });
+      return;
+    }
+
+    const url = `${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}&pack_id=${encodeURIComponent(getPackId())}&pack_version=${encodeURIComponent(getPackVersion())}`;
+    const out = await httpJson(url, { method: "GET" });
+
+    // 1) 至少保证 raw 可见（永不空白）
+    writeRaw({ ok: true, preset: out });
+
+    // 2) 如果你页面里这些 id 存在，则同步填上（不存在也不报错）
+    const setVal = (id, v) => { const x = document.getElementById(id); if (x) x.value = (v ?? ""); };
+
+    // 这些 id 你实际用什么我不确定，所以这里多写几组常见命名，命中即可
+    const p = out?.preset || out; // 兼容：有的返回 {preset:{...}}，有的直接 {...}
+
+    setVal("snap_preset_id", p?.preset_id);
+    setVal("snap_enabled", p?.enabled);
+    setVal("snap_stage", p?.stage);
+    setVal("snap_stage_entered_at", p?.stage_entered_at || p?.stage_entered_iso);
+    setVal("snap_disabled_reason", p?.disabled_reason);
+    setVal("snap_disabled_at", p?.disabled_at || p?.disabled_iso);
+
+    // baseline totals / window / metrics 这种只读块一般是 <pre>
+    const elBase = document.getElementById("snapBaselineTotals") || document.getElementById("snap_baseline_totals");
+    if (elBase) elBase.textContent = JSON.stringify(p?.baseline_totals || p?.baseline || null, null, 2);
+
+  } catch (e) {
+    console.error(e);
+    writeRaw({ ok: false, error: e?.message || String(e) });
+  }
+}
+
+// 事件委托：任何时候点击 preset 相关按钮，都顺手刷新 snapshot（不影响原逻辑）
+document.addEventListener("click", (ev) => {
+  const t = ev.target.closest("button");
+  if (!t) return;
+
+  const id = t.id || "";
+  // 你已有的按钮：加载preset/更新preset/刷新列表/提交feedback 后，都应刷新 snapshot
+  if (
+    id === "btnPresetLoadToForm" ||
+    id === "btnPresetUpdate" ||
+    id === "btnPresetRefresh" ||
+    id === "btnFeedbackUpsert"
+  ) {
+    // 不阻断原逻辑，只在下一拍刷新
+    setTimeout(() => refreshPresetSnapshot(), 0);
+  }
+});
+
+// 选择框变化也刷新
+document.addEventListener("change", (ev) => {
+  const sel = ev.target;
+  if (sel && sel.id === "presetSelect") {
+    setTimeout(() => refreshPresetSnapshot(), 0);
+  }
+});
+
 
 
 
