@@ -646,6 +646,50 @@ bindEvents();
     else el.textContent = JSON.stringify(objOrText, null, 2);
   }
 
+    function setFieldValue(id, v) {
+    const el = $id(id);
+    if (!el) return;
+    const val = (v === undefined || v === null) ? "" : String(v);
+    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") el.value = val;
+    else el.textContent = val;
+  }
+
+  function setPreJson(id, obj) {
+    const el = $id(id);
+    if (!el) return;
+    if (obj === undefined || obj === null) {
+      el.textContent = "(empty)";
+      return;
+    }
+    el.textContent = (typeof obj === "string") ? obj : JSON.stringify(obj, null, 2);
+  }
+
+  function renderEvaluationSummary(out) {
+    // 兼容不同返回形态
+    const ev = out?.evaluation || out?.data?.evaluation || null;
+
+    // 如果没有 evaluation，就清空/置空，避免残留旧值
+    if (!ev) {
+      setFieldValue("evalAction", "");
+      setFieldValue("evalFromStage", "");
+      setFieldValue("evalToStage", "");
+      setFieldValue("evalRuleId", "");
+      setPreJson("evalWindow", null);
+      setPreJson("evalMetrics", null);
+      return;
+    }
+
+    // 常见字段名兼容：action / from_stage / to_stage / rule_id
+    setFieldValue("evalAction", ev.action ?? "");
+    setFieldValue("evalFromStage", ev.from_stage ?? ev.fromStage ?? out?.from_stage ?? "");
+    setFieldValue("evalToStage", ev.to_stage ?? ev.toStage ?? out?.stage ?? "");
+    setFieldValue("evalRuleId", ev.rule_id ?? ev.ruleId ?? "");
+
+    // window/metrics：你 UI 是 <pre>
+    setPreJson("evalWindow", ev.window ?? out?.window ?? null);
+    setPreJson("evalMetrics", ev.metrics ?? out?.metrics ?? null);
+  }
+
   function readNonNegInt(id) {
     const v = ($id(id)?.value ?? "").toString().trim();
     const n = Number(v);
@@ -705,6 +749,7 @@ bindEvents();
     });
 
     setFeedbackOut(out);
+    renderEvaluationSummary(out);
 
     const action = out?.evaluation?.action || "none";
     if (action === "advance" && out?.stage) {
