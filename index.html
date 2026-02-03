@@ -140,6 +140,18 @@
 
   <div class="row" style="margin-top:12px;">
     <div>
+      
+      <div class="hint" style="margin:8px 0 12px 0; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; background:#fafafa;">
+      <div style="font-weight:600; margin-bottom:6px;">口径说明（必读）</div>
+      <div style="line-height:1.5;">
+        1) 这里填的是 <b>累计总量</b>（截止到该日期），不是“当天新增”。<br/>
+        2) Date 是“这次记录对应的截止日”，默认今天，可手动改。<br/>
+        3) 提交后系统只返回 <b>advance / disable / continue</b>，不提供建议。
+      </div>
+    </div>
+
+    <div id="fbWarn" class="muted" style="margin:0 0 10px 0;"></div>
+
       <label>Date (YYYY-MM-DD)</label>
       <input id="fbDate" placeholder="2026-02-03" />
     </div>
@@ -234,5 +246,6 @@
 </body>
 
 </html>
+
 
 
