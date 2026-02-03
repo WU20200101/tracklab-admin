@@ -649,6 +649,76 @@ function todayYmdLocal() {
   return `${y}-${m}-${day}`;
 }
 
+
+// ---------- Feedback 人性保护（前端护栏；不改 worker） ----------
+function setFbWarn(text) {
+  const el = document.getElementById("fbWarn");
+  if (!el) return;
+  el.textContent = text || "";
+}
+
+function ensureFeedbackDateDefault() {
+  const el = document.getElementById("fbDate");
+  if (el && !el.value) el.value = todayYmdLocal();
+}
+
+function parseYmd(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+// 软校验：如果未来你在“Preset 状态总览”里加了 presetStageEnteredAt（ISO），这里会自动提示口径风险
+function softValidateFeedbackDateAgainstStage() {
+  const dateStr = (document.getElementById("fbDate")?.value || "").trim();
+  const dt = parseYmd(dateStr);
+  if (!dt) {
+    setFbWarn("⚠ Date 格式必须为 YYYY-MM-DD。");
+    return false;
+  }
+
+  const enteredIso = (document.getElementById("presetStageEnteredAt")?.value || "").trim();
+  if (!enteredIso) { setFbWarn(""); return true; }
+
+  const enteredDate = enteredIso.slice(0, 10);
+  const et = parseYmd(enteredDate);
+  if (!et) { setFbWarn(""); return true; }
+
+  if (dt < et) {
+    setFbWarn(`⚠ Date 早于进入当前 Stage 的日期（${enteredDate}）。若你填的是累计总量，这通常意味着口径不一致。`);
+    return true; // 软提示，不阻断
+  }
+
+  setFbWarn("");
+  return true;
+}
+
+// 硬校验：非负整数；异常直接阻断提交（避免“静默归零”造成伪数据）
+function readNonNegIntStrict(id, label) {
+  const raw = (document.getElementById(id)?.value ?? "").toString().trim();
+  if (raw === "") return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) throw new Error(`${label || id} 必须是数字`);
+  if (n < 0) throw new Error(`${label || id} 不能为负数`);
+  return Math.trunc(n);
+}
+
+// 防呆：当数值整体很小，提示一次“你填的是累计总量吗”
+function maybeConfirmCumulative(totals) {
+  const small =
+    (totals.views ?? 0) <= 50 &&
+    (totals.likes ?? 0) <= 10 &&
+    (totals.collects ?? 0) <= 5 &&
+    (totals.comments ?? 0) <= 5 &&
+    (totals.dm_inbound ?? 0) <= 2;
+
+  if (!small) return true;
+
+  return window.confirm(
+    "确认：你填写的是“累计总量”（截止该日期），不是当天新增？\n\n若只是当天数据，请先把总量累加后再提交。"
+  );
+}
+
 function toNonNegIntFromInput(id) {
   const raw = (document.getElementById(id)?.value ?? "").toString().trim();
   const n = Number(raw);
@@ -673,12 +743,12 @@ function buildFeedbackUpsertBody(preset_id) {
     preset_id,
     date,
     totals: {
-      posts: toNonNegIntFromInput("fbPosts"),
-      views: toNonNegIntFromInput("fbViews"),
-      likes: toNonNegIntFromInput("fbLikes"),
-      collects: toNonNegIntFromInput("fbCollects"),
-      comments: toNonNegIntFromInput("fbComments"),
-      dm_inbound: toNonNegIntFromInput("fbDmInbound"),
+      posts: readNonNegIntStrict("fbPosts", "Posts（累计）"),
+      views: readNonNegIntStrict("fbViews", "Views（累计）"),
+      likes: readNonNegIntStrict("fbLikes", "Likes（累计）"),
+      collects: readNonNegIntStrict("fbCollects", "Collects（累计）"),
+      comments: readNonNegIntStrict("fbComments", "Comments（累计）"),
+      dm_inbound: readNonNegIntStrict("fbDmInbound", "DM Inbound（累计）"),
     },
     note,
   };
@@ -705,8 +775,13 @@ function applyEvaluationSideEffects(resp) {
 }
 
 async function onFeedbackUpsert() {
+  ensureFeedbackDateDefault();
+  softValidateFeedbackDateAgainstStage();
+
   const presetId = getEffectivePresetIdOrThrow();
   const body = buildFeedbackUpsertBody(presetId);
+
+  if (!maybeConfirmCumulative(body.totals)) return;
 
   setStatus("info", "提交反馈中…");
   setFeedbackOut({ ok: true, status: "submitting", body });
@@ -732,12 +807,6 @@ async function onFeedbackUpsert() {
   setStatus("ok", `Feedback 已写入，evaluation.action=${action}`);
 }
 
-function setFeedbackOut(objOrText) {
-  const el = document.getElementById("feedbackOut");
-  if (!el) return;
-  if (typeof objOrText === "string") el.textContent = objOrText;
-  else el.textContent = JSON.stringify(objOrText, null, 2);
-}
 
 
 function bindFeedbackDefaults() {
@@ -813,7 +882,6 @@ document.addEventListener("click", (ev) => {
   if (up) { ev.preventDefault(); onFeedbackUpsert().catch(showError); }
   if (fill) { ev.preventDefault(); onFeedbackFillFromStats().catch(showError); }
 });
-
 
 
 
