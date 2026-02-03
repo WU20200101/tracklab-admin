@@ -635,6 +635,136 @@ function setDefaults() {
 setDefaults();
 bindEvents();
 
+// ===== Feedback hard fallback (never silent) =====
+(function () {
+  const $id = (x) => document.getElementById(x);
+
+  function setFeedbackOut(objOrText) {
+    const el = $id("feedbackOut");
+    if (!el) return;
+    if (typeof objOrText === "string") el.textContent = objOrText;
+    else el.textContent = JSON.stringify(objOrText, null, 2);
+  }
+
+  function readNonNegInt(id) {
+    const v = ($id(id)?.value ?? "").toString().trim();
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.trunc(n);
+  }
+
+  function getPresetIdStrict() {
+    // 你的页面里 presetId 输入框是“当前 Preset ID（用于 Jobs/更新）”
+    const a = ($id("presetId")?.value || "").trim();
+    if (a) return a;
+    const b = ($id("presetSelect")?.value || "").trim();
+    if (b) return b;
+    throw new Error("preset_id 为空：先选择/加载一个 preset");
+  }
+
+  function ensureDateDefault() {
+    const d = $id("fbDate");
+    if (!d) return;
+    if (d.value) return;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    d.value = `${y}-${m}-${day}`;
+  }
+
+  async function doFeedbackUpsert() {
+    ensureDateDefault();
+    const preset_id = getPresetIdStrict();
+
+    const date = ($id("fbDate")?.value || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date 格式必须为 YYYY-MM-DD");
+
+    const body = {
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+      preset_id,
+      date,
+      totals: {
+        posts: readNonNegInt("fbPosts"),
+        views: readNonNegInt("fbViews"),
+        likes: readNonNegInt("fbLikes"),
+        collects: readNonNegInt("fbCollects"),
+        comments: readNonNegInt("fbComments"),
+        dm_inbound: readNonNegInt("fbDmInbound"),
+      },
+      note: ($id("fbNote")?.value || "").trim() || null,
+    };
+
+    setStatus("info", "feedback/upsert 提交中…");
+    setFeedbackOut({ ok: true, status: "submitting", body });
+
+    const out = await httpJson(`${apiBase()}/feedback/upsert`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+    setFeedbackOut(out);
+
+    const action = out?.evaluation?.action || "none";
+    if (action === "advance" && out?.stage) {
+      setStage(out.stage);
+    }
+    if (action === "disable") {
+      // disable 后可能从 enabled=1 列表消失：清空当前选择，避免用户误以为还在
+      if ($id("presetSelect")) $id("presetSelect").value = "";
+      if ($id("presetId")) $id("presetId").value = "";
+    }
+
+    try { await presetRefreshList?.(); } catch {}
+    try { await jobsLoadLatest?.(); } catch {}
+
+    setStatus("ok", `feedback 已写入；evaluation.action=${action}`);
+  }
+
+  async function doJobsStats() {
+    const preset_id = getPresetIdStrict();
+    setStatus("info", "获取 jobs stats 中…");
+    setFeedbackOut({ ok: true, status: "loading_jobs_stats", preset_id });
+
+    // 你原来应该有 buildJobsStatsUrl；没有就直接 fallback 拼 URL
+    const url = (typeof buildJobsStatsUrl === "function")
+      ? buildJobsStatsUrl(preset_id)
+      : `${apiBase()}/jobs/stats_by_preset?preset_id=${encodeURIComponent(preset_id)}`;
+
+    const out = await httpJson(url, { method: "GET" });
+    setFeedbackOut({ ok: true, jobs_stats: out });
+    setStatus("ok", `jobs stats：total=${out.total}, generated=${out.generated}, failed=${out.failed}`);
+  }
+
+  // 事件委托：无论原来有没有绑定，这里都能保证触发
+  document.addEventListener("click", (ev) => {
+    const up = ev.target.closest("#btnFeedbackUpsert");
+    const st = ev.target.closest("#btnFeedbackFillFromStats");
+    if (!up && !st) return;
+
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    // 硬保证按钮不是 submit
+    if (up) up.type = "button";
+    if (st) st.type = "button";
+
+    (async () => {
+      try {
+        if (up) await doFeedbackUpsert();
+        if (st) await doJobsStats();
+      } catch (e) {
+        console.error(e);
+        const msg = e?.message || String(e);
+        setStatus("error", msg);
+        setFeedbackOut({ ok: false, error: msg });
+      }
+    })();
+  });
+
+  ensureDateDefault();
+})();
 
 
 
