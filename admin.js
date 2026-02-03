@@ -876,13 +876,6 @@ setDefaults();
 bindEvents();
 bindFeedbackDefaults();
 
-document.addEventListener("click", (ev) => {
-  const up = ev.target.closest("#btnFeedbackUpsert");
-  const fill = ev.target.closest("#btnFeedbackFillFromStats");
-  if (up) { ev.preventDefault(); onFeedbackUpsert().catch(showError); }
-  if (fill) { ev.preventDefault(); onFeedbackFillFromStats().catch(showError); }
-});
-
 
 
 
