@@ -896,3 +896,187 @@ document.addEventListener("change", (ev) => {
     setTimeout(() => refreshPresetSnapshot(), 0);
   }
 });
+
+// ===== Accounts / Binding / Outcomes (MVP) =====
+(function () {
+  const $id = (x) => document.getElementById(x);
+
+  function setPre(id, obj) {
+    const el = $id(id);
+    if (!el) return;
+    el.textContent = (obj == null) ? "(empty)" : (typeof obj === "string" ? obj : JSON.stringify(obj, null, 2));
+  }
+
+  function todayYMD() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function getOwnerIdStrict() {
+    const v = ($id("ownerId")?.value || "").trim();
+    if (!v) throw new Error("owner_id 为空：先填 Owner ID");
+    return v;
+  }
+
+  function getAccountIdSelectedStrict() {
+    const v = ($id("accountSelect")?.value || "").trim();
+    if (!v) throw new Error("account_id 为空：先选择一个 Account");
+    return v;
+  }
+
+  async function accountList() {
+    const owner_id = getOwnerIdStrict();
+    const url = `${apiBase()}/account/list?owner_id=${encodeURIComponent(owner_id)}`;
+    const out = await httpJson(url, { method: "GET" });
+
+    const items = out.items || [];
+    const sel = $id("accountSelect");
+    if (sel) {
+      sel.innerHTML = "";
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = items.length ? "请选择" : "(empty)";
+      sel.appendChild(empty);
+
+      items.forEach((it) => {
+        const opt = document.createElement("option");
+        opt.value = it.id;
+        opt.textContent = `${it.handle || "(no handle)"} (${it.updated_at || ""})`;
+        sel.appendChild(opt);
+      });
+    }
+
+    setPre("accountOut", { ok: true, items_count: items.length, items });
+    setStatus("ok", `Accounts 刷新完成：${items.length} 个`);
+    return items;
+  }
+
+  async function accountCreate() {
+    const owner_id = getOwnerIdStrict();
+    const handle = ($id("accountHandle")?.value || "").trim() || null;
+
+    const body = {
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+      owner_id,
+      handle,
+      note: null,
+    };
+
+    const out = await httpJson(`${apiBase()}/account/create`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+    setPre("accountOut", out);
+    setStatus("ok", `Account 已创建：${out?.account?.id || "na"}`);
+
+    await accountList();
+    // 尝试自动选中新创建的
+    const newId = out?.account?.id;
+    if (newId && $id("accountSelect")) $id("accountSelect").value = newId;
+
+    return out;
+  }
+
+  async function presetBindAccount() {
+    const preset_id = (document.getElementById("presetId")?.value || "").trim()
+      || (document.getElementById("presetSelect")?.value || "").trim();
+    if (!preset_id) throw new Error("preset_id 为空：先选择/加载一个 preset");
+
+    const account_id = getAccountIdSelectedStrict();
+
+    const body = {
+      preset_id,
+      account_id,
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+    };
+
+    const out = await httpJson(`${apiBase()}/preset/bind_account`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+    setPre("accountOut", out);
+    setStatus("ok", `Preset 已绑定 Account：preset_id=${preset_id}`);
+    // 顺手刷新 snapshot（如果你那块存在）
+    try { await refreshPresetSnapshot(); } catch {}
+    return out;
+  }
+
+  async function outcomeUpsert() {
+    const preset_id = (document.getElementById("presetId")?.value || "").trim()
+      || (document.getElementById("presetSelect")?.value || "").trim();
+    if (!preset_id) throw new Error("preset_id 为空：先选择/加载一个 preset");
+
+    const account_id = getAccountIdSelectedStrict();
+
+    const date = ($id("ocDate")?.value || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Outcome date 格式必须为 YYYY-MM-DD");
+
+    const body = {
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+      account_id,
+      preset_id,
+      job_id: null,
+      date,
+      window: ($id("ocWindow")?.value || "daily"),
+      lead_created: Number($id("ocLeadCreated")?.value || 0),
+      paid: Number($id("ocPaid")?.value || 0),
+      amount_cents: Number($id("ocAmountCents")?.value || 0),
+      leads_count: Number($id("ocLeadsCount")?.value || 0),
+      note: ($id("ocNote")?.value || "").trim() || null,
+    };
+
+    const out = await httpJson(`${apiBase()}/outcome/upsert`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+    setPre("outcomeOut", out);
+    setStatus("ok", "Outcome 已写入");
+    return out;
+  }
+
+  async function statsPreset() {
+    const preset_id = (document.getElementById("presetId")?.value || "").trim()
+      || (document.getElementById("presetSelect")?.value || "").trim();
+    if (!preset_id) throw new Error("preset_id 为空：先选择/加载一个 preset");
+
+    const url = `${apiBase()}/stats/preset?preset_id=${encodeURIComponent(preset_id)}`;
+    const out = await httpJson(url, { method: "GET" });
+
+    setPre("statsOut", out);
+    setStatus("ok", "Stats（preset）已拉取");
+    return out;
+  }
+
+  function ensureOutcomeDateDefault() {
+    const el = $id("ocDate");
+    if (el && !el.value) el.value = todayYMD();
+  }
+
+  function bindAccountEvents() {
+    const b1 = $id("btnAccountRefresh");
+    const b2 = $id("btnAccountCreate");
+    const b3 = $id("btnPresetBindAccount");
+    const b4 = $id("btnOutcomeUpsert");
+    const b5 = $id("btnStatsPreset");
+
+    if (b1) b1.addEventListener("click", () => accountList().catch(showError));
+    if (b2) b2.addEventListener("click", () => accountCreate().catch(showError));
+    if (b3) b3.addEventListener("click", () => presetBindAccount().catch(showError));
+    if (b4) b4.addEventListener("click", () => outcomeUpsert().catch(showError));
+    if (b5) b5.addEventListener("click", () => statsPreset().catch(showError));
+
+    ensureOutcomeDateDefault();
+  }
+
+  // 页面加载后绑定一次（不依赖你原 bindEvents）
+  bindAccountEvents();
+})();
