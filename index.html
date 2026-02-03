@@ -29,9 +29,6 @@
     pre { white-space: pre-wrap; word-break: break-word; background:#0b1020; color:#e5e7eb; padding: 12px; border-radius: 12px; overflow:auto; }
     .error { color:#b91c1c; font-size: 13px; }
     .ok { color:#065f46; font-size: 13px; }
-    .card { border: 1px solid #ddd; padding: 12px; margin-bottom: 12px; }
-    .card h3 { margin-top: 0; }
-    input, select, button, textarea { width: 100%; padding: 6px; margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -146,51 +143,6 @@
     </div>
   </div>
 
-  <!-- ===== 新增：反馈录入面板 ===== -->
-  <div class="card">
-    <h3>反馈录入（每日一次，总量）</h3>
-
-    <label>
-      日期
-      <input type="date" id="fb_date" />
-    </label>
-
-    <label>已发布内容数
-      <input type="number" id="fb_posts" placeholder="posts total" />
-    </label>
-
-    <label>阅读总量
-      <input type="number" id="fb_views" placeholder="views total" />
-    </label>
-
-    <label>点赞总量
-      <input type="number" id="fb_likes" placeholder="likes total" />
-    </label>
-
-    <label>收藏总量
-      <input type="number" id="fb_collects" placeholder="collects total" />
-    </label>
-
-    <label>评论总量
-      <input type="number" id="fb_comments" placeholder="comments total" />
-    </label>
-
-    <label>私信/咨询总量
-      <input type="number" id="fb_dm" placeholder="dm inbound total" />
-    </label>
-
-    <label>备注（可选）
-      <textarea id="fb_note" rows="2"></textarea>
-    </label>
-
-    <button onclick="submitFeedback()">提交反馈并自动判定</button>
-
-    <h4>返回结果</h4>
-    <pre id="feedbackOut"></pre>
-  </div>
-
-  <!-- ===== JS ===== -->
-  <script src="./admin.js?v=20260203a"></script>
+  <script src="./admin.js?v=20260202c"></script>
 </body>
-
 </html>
