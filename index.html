@@ -107,6 +107,48 @@
         <input id="presetId" placeholder="选择 preset 后自动填入" readonly />
         <div class="muted">注意：Generate 仍然按你现在的方式（stage+payload），这里不改变 Generate 行为。</div>
       </div>
+
+      <div class="card">
+  <h3 style="margin:0 0 8px 0;">Preset Snapshot（只读）</h3>
+  <div class="muted">用于确认 preset 当前 stage / enabled / 进入时间 / disable 原因等。只展示事实，不做判断。</div>
+
+  <div class="row" style="margin-top:12px;">
+    <div>
+      <label>preset_id</label>
+      <input id="snapPresetId" disabled />
+    </div>
+    <div>
+      <label>enabled</label>
+      <input id="snapEnabled" disabled />
+    </div>
+    <div>
+      <label>stage</label>
+      <input id="snapStage" disabled />
+    </div>
+    <div>
+      <label>stage_entered_at</label>
+      <input id="presetStageEnteredAt" disabled />
+    </div>
+    <div>
+      <label>disabled_reason</label>
+      <input id="snapDisabledReason" disabled />
+    </div>
+    <div>
+      <label>disabled_at</label>
+      <input id="snapDisabledAt" disabled />
+    </div>
+  </div>
+
+  <div class="group">
+    <label>baseline totals（仅 advance 后存在）</label>
+    <pre id="snapBaseline">(empty)</pre>
+  </div>
+
+  <div class="group">
+    <label>raw preset（只读，调试用）</label>
+    <pre id="snapRaw">(empty)</pre>
+  </div>
+</div>
     </div>
 
     <!-- Jobs（只读） -->
@@ -246,6 +288,7 @@
 </body>
 
 </html>
+
 
 
 
