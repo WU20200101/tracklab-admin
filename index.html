@@ -151,6 +151,99 @@
 </div>
     </div>
 
+<!-- Accounts + Binding + Outcomes -->
+<div class="card">
+  <h3 style="margin:0 0 8px 0;">Accounts / 私域&交易事实（MVP）</h3>
+  <div class="muted">只写事实：account/create, account/list, preset/bind_account, outcome/upsert, stats/preset</div>
+
+  <div class="row" style="margin-top:12px;">
+    <div>
+      <label>Owner ID（谁在跑这批账号）</label>
+      <input id="ownerId" placeholder="例如：wuxiaofei / wife / ops1" />
+    </div>
+    <div>
+      <label>Account Handle（账号名/备注）</label>
+      <input id="accountHandle" placeholder="例如：xhs_宝妈01" />
+    </div>
+    <div>
+      <label>Accounts（当前 owner）</label>
+      <select id="accountSelect">
+        <option value="">(empty)</option>
+      </select>
+    </div>
+  </div>
+
+  <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+    <button id="btnAccountRefresh" style="width:auto;padding:10px 14px;">刷新 Accounts</button>
+    <button id="btnAccountCreate" class="primary" style="width:auto;padding:10px 14px;">创建 Account</button>
+    <button id="btnPresetBindAccount" class="primary" style="width:auto;padding:10px 14px;">绑定：Preset → Account</button>
+    <button id="btnStatsPreset" style="width:auto;padding:10px 14px;">拉取 Stats（preset）</button>
+  </div>
+
+  <div class="group">
+    <label>当前绑定状态（只读）</label>
+    <pre id="accountOut">(empty)</pre>
+  </div>
+
+  <div class="group">
+    <h4 style="margin:0 0 10px 0;">Outcome（私域/交易事实回流）</h4>
+    <div class="row">
+      <div>
+        <label>Date (YYYY-MM-DD)</label>
+        <input id="ocDate" placeholder="2026-02-03" />
+      </div>
+      <div>
+        <label>Window</label>
+        <select id="ocWindow">
+          <option value="daily">daily</option>
+          <option value="weekly">weekly</option>
+        </select>
+      </div>
+      <div>
+        <label>Lead Created (0/1)</label>
+        <select id="ocLeadCreated">
+          <option value="0">0</option>
+          <option value="1">1</option>
+        </select>
+      </div>
+      <div>
+        <label>Paid (0/1)</label>
+        <select id="ocPaid">
+          <option value="0">0</option>
+          <option value="1">1</option>
+        </select>
+      </div>
+      <div>
+        <label>Amount (cents)</label>
+        <input id="ocAmountCents" type="number" min="0" step="1" value="0" />
+      </div>
+      <div>
+        <label>Leads Count</label>
+        <input id="ocLeadsCount" type="number" min="0" step="1" value="0" />
+      </div>
+    </div>
+
+    <div class="group">
+      <label>Note（可选）</label>
+      <input id="ocNote" placeholder="例如：微信加了2个；其中1个已付" />
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button id="btnOutcomeUpsert" class="primary" style="width:auto;padding:10px 14px;">提交 Outcome</button>
+    </div>
+
+    <div class="group">
+      <label>Outcome 返回（只读）</label>
+      <pre id="outcomeOut">(empty)</pre>
+    </div>
+
+    <div class="group">
+      <label>Stats（只读）</label>
+      <pre id="statsOut">(empty)</pre>
+    </div>
+  </div>
+</div>
+    
     <!-- Jobs（只读） -->
     <div class="card">
       <h3 style="margin:0 0 8px 0;">Jobs（只读）</h3>
@@ -288,6 +381,7 @@
 </body>
 
 </html>
+
 
 
 
