@@ -766,59 +766,37 @@ bindEvents();
   ensureDateDefault();
 })();
 
-// ===== Preset Snapshot hard refresh (wired to real DOM ids) =====
-async function refreshPresetSnapshot() {
-  const elRaw = document.getElementById("snapRaw");
-  const elBase = document.getElementById("snapBaseline");
+// 兼容多种返回：{preset:{item:{...}}} / {item:{...}} / 直接 {...}
+const item =
+  out?.preset?.item ||
+  out?.item ||
+  out?.preset ||
+  out;
 
-  const writeRaw = (obj) => {
-    if (!elRaw) return;
-    elRaw.textContent = (typeof obj === "string") ? obj : JSON.stringify(obj, null, 2);
-  };
-  const writeBase = (obj) => {
-    if (!elBase) return;
-    elBase.textContent = (obj == null) ? "(empty)" : JSON.stringify(obj, null, 2);
-  };
+writeRaw({ ok: true, preset: item });
 
-  try {
-    const preset_id =
-      (document.getElementById("presetId")?.value || "").trim() ||
-      (document.getElementById("presetSelect")?.value || "").trim();
+const setVal = (id, v) => {
+  const x = document.getElementById(id);
+  if (x) x.value = (v ?? "");
+};
 
-    if (!preset_id) {
-      writeRaw({ ok: false, error: "preset_id 为空：先加载/选择一个 preset" });
-      return;
-    }
+// 注意：D1 里主键叫 id（不是 preset_id）
+setVal("snapPresetId", item?.id || preset_id);
 
-    const url =
-      `${apiBase()}/preset/get` +
-      `?pack_id=${encodeURIComponent(getPackId())}` +
-      `&pack_version=${encodeURIComponent(getPackVersion())}` +
-      `&preset_id=${encodeURIComponent(preset_id)}`;
+// enabled/stage 在 item 上
+setVal("snapEnabled", item?.enabled ?? "");
+setVal("snapStage", item?.stage ?? "");
 
-    const out = await httpJson(url, { method: "GET" });
+// 你页面上 stage_entered_at 的 input id 是 presetStageEnteredAt
+// 后端当前没有 stage_entered_at 字段时就空（这是事实，不强造）
+setVal("presetStageEnteredAt", item?.stage_entered_at || item?.stage_entered_iso || "");
 
-    // 兼容两种返回：{preset:{...}} 或直接 {...}
-    const p = out?.preset || out;
+// disabled 字段
+setVal("snapDisabledReason", item?.disabled_reason || "");
+setVal("snapDisabledAt", item?.disabled_at || item?.disabled_iso || "");
 
-    // raw 永远写（避免再“空白无感”）
-    writeRaw({ ok: true, preset: p });
-
-    // 写入 Snapshot input
-    const setVal = (id, v) => {
-      const x = document.getElementById(id);
-      if (x) x.value = (v ?? "");
-    };
-
-    setVal("snapPresetId", p?.preset_id || preset_id);
-    setVal("snapEnabled", p?.enabled);
-    setVal("snapStage", p?.stage);
-    setVal("presetStageEnteredAt", p?.stage_entered_at || p?.stage_entered_iso || "");
-    setVal("snapDisabledReason", p?.disabled_reason || "");
-    setVal("snapDisabledAt", p?.disabled_at || p?.disabled_iso || "");
-
-    // baseline totals（只读 pre）
-    writeBase(p?.baseline_totals || null);
+// baseline totals：如果后端还没写（你截图里也没有），就显示 (empty)
+writeBase(item?.baseline_totals || null);
 
   } catch (e) {
     console.error(e);
