@@ -51,7 +51,9 @@ function renderEvaluationSummary(resp) {
   fs.value = ev.from_stage || "";
   ts.value = ev.to_stage || "";
   rid.value = ev.rule_id || "";
-  win.value = ev.window || "";
+  win.textContent = ev.window
+  ? JSON.stringify(ev.window, null, 2)
+  : "(empty)";
 
   const metrics = ev.metrics ?? null;
   m.textContent = metrics ? JSON.stringify(metrics, null, 2) : "(empty)";
@@ -811,6 +813,7 @@ document.addEventListener("click", (ev) => {
   if (up) { ev.preventDefault(); onFeedbackUpsert().catch(showError); }
   if (fill) { ev.preventDefault(); onFeedbackFillFromStats().catch(showError); }
 });
+
 
 
 
