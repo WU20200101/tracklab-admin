@@ -12,19 +12,6 @@
  */
 
 const $ = (id) => document.getElementById(id);
-
-// Safe DOM helpers for multi-index.html usage (public/self):
-const hasEl = (id) => !!document.getElementById(id);
-const onEl = (id, evt, fn) => { const el = $(id); if (el) el.addEventListener(evt, fn); };
-const setText = (id, text) => { const el = $(id); if (el) el.textContent = text; };
-const setVal = (id, v) => { const el = $(id); if (el) el.value = (v === null || v === undefined) ? "" : String(v); };
-
-// Optional: page mode switch via <meta name="tracklab-mode" content="public|self">
-function getMode() {
-  return document.querySelector('meta[name="tracklab-mode"]')?.content || "self";
-}
-function isPublicMode() { return getMode() === "public"; }
-
 let currentSchema = null;
 
 // ---------- 通用工具 ----------
@@ -160,7 +147,6 @@ function escapeHtml(s) {
 
 function setStatus(type, msg) {
   const el = $("status");
-  if (!el) return;
   if (!msg) {
     el.innerHTML = "";
     return;
@@ -401,11 +387,11 @@ function applyPayloadToForm(schema, payload) {
 // ---------- 原有行为（保持） ----------
 async function loadSchema() {
   setStatus("", "");
-  setText("previewOut", "(empty)");
-  setText("genOut", "(empty)");
-  setText("jobDetail", "(empty)");
-  setText("jobsTable", "(empty)");
-  setText("jobsStats", "(empty)");
+  $("previewOut").textContent = "(empty)";
+  $("genOut").textContent = "(empty)";
+  $("jobDetail").textContent = "(empty)";
+  $("jobsTable").textContent = "(empty)";
+  $("jobsStats").textContent = "(empty)";
 
   const url = `${apiBase()}/pack/${getPackId()}/${getPackVersion()}`;
   setStatus("muted", `GET ${url}`);
@@ -443,7 +429,7 @@ async function previewPrompt() {
     body: JSON.stringify(body),
   });
 
-  setText("previewOut", JSON.stringify(out, null, 2));
+  $("previewOut").textContent = JSON.stringify(out, null, 2);
 
   if (out.blocked) setStatus("error", `被 Gate 拦截：${(out.reasons || []).join("; ")}`);
   else setStatus("ok", "Preview 成功");
@@ -472,7 +458,7 @@ async function onGenerate() {
     body: JSON.stringify(body),
   });
 
-  setText("genOut", JSON.stringify(out, null, 2));
+  $("genOut").textContent = JSON.stringify(out, null, 2);
   setStatus("ok", `Generate 完成，job_id=${out.job_id || "na"}`);
 }
 
@@ -498,7 +484,7 @@ async function presetCreateFromCurrentPayload() {
     body: JSON.stringify(body),
   });
 
-  setVal("presetId", out.preset_id || "");
+  $("presetId").value = out.preset_id || "";
   setStatus("ok", `Preset 已创建：preset_id=${out.preset_id || "na"}`);
 
   await presetRefreshList();
@@ -519,7 +505,6 @@ async function presetRefreshList() {
   const items = out.items || [];
 
   const sel = $("presetSelect");
-  if (!sel) { setStatus("warn", "presetSelect 不存在：该页面可能是 public 版，已跳过 Preset 列表渲染"); return; }
   sel.innerHTML = "";
 
   const empty = document.createElement("option");
@@ -538,21 +523,18 @@ async function presetRefreshList() {
 }
 
 function presetUseSelected() {
-  const sel = $("presetSelect");
-  const presetId = sel ? sel.value : "";
+  const presetId = $("presetSelect").value;
   if (!presetId) throw new Error("未选择 preset");
 
-  setVal("presetId", presetId);
+  $("presetId").value = presetId;
   setStatus("ok", `已选定 preset_id=${presetId}（用于 Jobs / 更新）`);
 }
 
 // ✅ 新增：选择下拉时自动写入 presetId（减少误操作）
 function bindPresetSelectAutofill() {
-  const sel = $("presetSelect");
-  if (!sel) return;
-  sel.addEventListener("change", () => {
-    const v = sel.value;
-    if (v) setVal("presetId", v);
+  $("presetSelect").addEventListener("change", () => {
+    const v = $("presetSelect").value;
+    if (v) $("presetId").value = v;
   });
 }
 
@@ -561,7 +543,7 @@ function bindPresetSelectAutofill() {
 async function presetLoadSelectedToForm() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
-  const preset_id = ($("presetSelect")?.value || $("presetId")?.value || "").trim();
+  const preset_id = $("presetSelect").value || $("presetId").value.trim();
   if (!preset_id) throw new Error("未选择 preset");
 
   const url =
@@ -574,7 +556,7 @@ async function presetLoadSelectedToForm() {
   if (!item) throw new Error("preset_get 返回为空");
 
   // 同步 preset_id / stage（不推进阶段，只是把事实对齐到 UI）
-  setVal("presetId", item.id);
+  $("presetId").value = item.id;
   setStage(item.stage);
 
   // 回填表单（只按 schema key 回填）
@@ -591,7 +573,7 @@ async function presetLoadSelectedToForm() {
 async function presetUpdateFromCurrentForm() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
-  const preset_id = ($("presetId")?.value || "").trim() || $("presetSelect")?.value;
+  const preset_id = $("presetId").value.trim() || $("presetSelect").value;
   if (!preset_id) throw new Error("preset_id 为空（先选择/加载 preset）");
 
   const body = {
@@ -625,12 +607,11 @@ function buildJobGetUrl(jobId) {
 }
 
 function renderJobsStats(stats) {
-  setText("jobsStats", `total=${stats.total}, generated=${stats.generated}, failed=${stats.failed}`);
+  $("jobsStats").textContent = `total=${stats.total}, generated=${stats.generated}, failed=${stats.failed}`;
 }
 
 function renderJobsTable(items) {
   const host = $("jobsTable");
-  if (!host) return;
   if (!items || items.length === 0) {
     host.textContent = "(empty)";
     return;
@@ -680,15 +661,15 @@ function renderJobsTable(items) {
 
 async function loadJobDetail(jobId) {
   const out = await httpJson(buildJobGetUrl(jobId), { method: "GET" });
-  setText("jobDetail", JSON.stringify(out, null, 2));
+  $("jobDetail").textContent = JSON.stringify(out, null, 2);
 }
 
 function getEffectivePresetIdOrThrow() {
-  let presetId = ($("presetId")?.value || "").trim();
+  let presetId = $("presetId").value.trim();
   if (!presetId) {
-    const sel = $("presetSelect")?.value;
+    const sel = $("presetSelect").value;
     if (sel) {
-      setVal("presetId", sel);
+      $("presetId").value = sel;
       presetId = sel;
     }
   }
@@ -851,8 +832,8 @@ function applyEvaluationSideEffects(resp) {
 
   // 2) disable：清空当前 preset_id（因为 enabled=1 的 list 里会消失）
   if (action === "disable") {
-        setVal("presetId", "");
-    setVal("presetSelect", "");
+    $("presetId").value = "";
+    $("presetSelect").value = "";
   }
 
   // 3) 无论如何：刷新 preset 列表（事实对齐）
@@ -885,7 +866,7 @@ async function onFeedbackUpsert() {
 
   if (action === "advance") {
     try {
-            setVal("presetId", out.preset_id || presetId);
+      $("presetId").value = out.preset_id || presetId;
       await presetLoadSelectedToForm();
     } catch {}
   }
@@ -917,46 +898,50 @@ async function onFeedbackFillFromStats() {
 
 // ---------- 事件绑定 ----------
 function bindEvents() {
-  onEl("btnLoad", "click", () => loadSchema().catch(showError));
-  onEl("btnPreview", "click", () => previewPrompt().catch(showError));
-  onEl("btnGenerate", "click", () => onGenerate().catch(showError));
+  $("btnLoad").addEventListener("click", () => loadSchema().catch(showError));
+  $("btnPreview").addEventListener("click", () => previewPrompt().catch(showError));
+  $("btnGenerate").addEventListener("click", () => onGenerate().catch(showError));
 
-  // Feedback
-  onEl("btnFeedbackUpsert", "click", () => onFeedbackUpsert().catch(showError));
-  onEl("btnFeedbackFillFromStats", "click", () => onFeedbackFillFromStats().catch(showError));
+    // Feedback
+  $("btnFeedbackUpsert").addEventListener("click", () => onFeedbackUpsert().catch(showError));
+  $("btnFeedbackFillFromStats").addEventListener("click", () => onFeedbackFillFromStats().catch(showError));
 
-  // Preset
-  onEl("btnPresetCreate", "click", () => presetCreateFromCurrentPayload().catch(showError));
-  onEl("btnPresetRefresh", "click", () => presetRefreshList().catch(showError));
-  onEl("btnPresetUse", "click", () => {
-    try { presetUseSelected(); } catch (e) { showError(e); }
+  $("btnPresetCreate").addEventListener("click", () => presetCreateFromCurrentPayload().catch(showError));
+  $("btnPresetRefresh").addEventListener("click", () => presetRefreshList().catch(showError));
+  $("btnPresetUse").addEventListener("click", () => {
+    try {
+      presetUseSelected();
+    } catch (e) {
+      showError(e);
+    }
   });
-  onEl("btnPresetLoadToForm", "click", () => presetLoadSelectedToForm().catch(showError));
-  onEl("btnPresetUpdateFromForm", "click", () => presetUpdateFromCurrentForm().catch(showError));
 
-  // Jobs（public 版可不提供这些按钮）
-  onEl("btnJobsStats", "click", () => onJobsStats().catch(showError));
-  onEl("btnJobsList", "click", () => onJobsList().catch(showError));
+  // ✅ 新增按钮
+  $("btnPresetLoadToForm").addEventListener("click", () => presetLoadSelectedToForm().catch(showError));
+  $("btnPresetUpdateFromForm").addEventListener("click", () => presetUpdateFromCurrentForm().catch(showError));
+
+  $("btnJobsStats").addEventListener("click", () => onJobsStats().catch(showError));
+  $("btnJobsList").addEventListener("click", () => onJobsList().catch(showError));
 
   bindPresetSelectAutofill();
 
-  onEl("stage", "change", () => { if (currentSchema) applyStageLock(currentSchema, getStage()); });
+  $("stage").addEventListener("change", () => {
+  if (currentSchema) applyStageLock(currentSchema, getStage());
+  });
+
 }
 
 // ---------- 默认值 ----------
-
 function setDefaults() {
-  // public/self 都可复用：不存在的 input 直接跳过
-  setVal("apiBase", "https://tracklab-api.wuxiaofei1985.workers.dev");
-  setVal("packId", "xhs");
-  setVal("packVer", "v1.0.0");
-  setVal("stage", "S0");
+  $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
+  $("packId").value = "xhs";
+  $("packVer").value = "v1.0.0";
+  $("stage").value = "S0";
 }
 
 setDefaults();
 bindEvents();
 bindFeedbackDefaults();
-ensureFeedbackDateDefault();
 
 
 
