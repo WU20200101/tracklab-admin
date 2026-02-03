@@ -766,37 +766,60 @@ bindEvents();
   ensureDateDefault();
 })();
 
-// 兼容多种返回：{preset:{item:{...}}} / {item:{...}} / 直接 {...}
-const item =
-  out?.preset?.item ||
-  out?.item ||
-  out?.preset ||
-  out;
+// ===== Preset Snapshot (read-only) =====
+async function refreshPresetSnapshot() {
+  const elRaw = document.getElementById("snapRaw");
+  const elBase = document.getElementById("snapBaseline");
 
-writeRaw({ ok: true, preset: item });
+  const writeRaw = (obj) => {
+    if (!elRaw) return;
+    elRaw.textContent = (typeof obj === "string") ? obj : JSON.stringify(obj, null, 2);
+  };
+  const writeBase = (obj) => {
+    if (!elBase) return;
+    elBase.textContent = (obj == null) ? "(empty)" : JSON.stringify(obj, null, 2);
+  };
 
-const setVal = (id, v) => {
-  const x = document.getElementById(id);
-  if (x) x.value = (v ?? "");
-};
+  try {
+    const preset_id =
+      (document.getElementById("presetId")?.value || "").trim() ||
+      (document.getElementById("presetSelect")?.value || "").trim();
 
-// 注意：D1 里主键叫 id（不是 preset_id）
-setVal("snapPresetId", item?.id || preset_id);
+    if (!preset_id) {
+      writeRaw({ ok: false, error: "preset_id 为空：先选择/加载一个 preset" });
+      return;
+    }
 
-// enabled/stage 在 item 上
-setVal("snapEnabled", item?.enabled ?? "");
-setVal("snapStage", item?.stage ?? "");
+    const url =
+      `${apiBase()}/preset/get` +
+      `?preset_id=${encodeURIComponent(preset_id)}` +
+      `&pack_id=${encodeURIComponent(getPackId())}` +
+      `&pack_version=${encodeURIComponent(getPackVersion())}`;
 
-// 你页面上 stage_entered_at 的 input id 是 presetStageEnteredAt
-// 后端当前没有 stage_entered_at 字段时就空（这是事实，不强造）
-setVal("presetStageEnteredAt", item?.stage_entered_at || item?.stage_entered_iso || "");
+    const out = await httpJson(url, { method: "GET" });
 
-// disabled 字段
-setVal("snapDisabledReason", item?.disabled_reason || "");
-setVal("snapDisabledAt", item?.disabled_at || item?.disabled_iso || "");
+    // 你的返回是 { ok:true, preset:{ item:{...} } }
+    const item =
+      out?.preset?.item ||
+      out?.item ||
+      out?.preset ||
+      out;
 
-// baseline totals：如果后端还没写（你截图里也没有），就显示 (empty)
-writeBase(item?.baseline_totals || null);
+    // raw 永远写出来，避免“无感”
+    writeRaw({ ok: true, preset: item });
+
+    const setVal = (id, v) => {
+      const x = document.getElementById(id);
+      if (x) x.value = (v ?? "");
+    };
+
+    setVal("snapPresetId", item?.id || preset_id);
+    setVal("snapEnabled", item?.enabled ?? "");
+    setVal("snapStage", item?.stage ?? "");
+    setVal("presetStageEnteredAt", item?.stage_entered_at || item?.stage_entered_iso || "");
+    setVal("snapDisabledReason", item?.disabled_reason || "");
+    setVal("snapDisabledAt", item?.disabled_at || item?.disabled_iso || "");
+    writeBase(item?.baseline_totals || null);
 
   } catch (e) {
     console.error(e);
@@ -804,7 +827,7 @@ writeBase(item?.baseline_totals || null);
   }
 }
 
-// 点击这些按钮后刷新 snapshot（不阻断原逻辑）
+// 点击 preset/feedback 相关按钮后，刷新 snapshot（不影响原逻辑）
 document.addEventListener("click", (ev) => {
   const btn = ev.target.closest("button");
   if (!btn) return;
@@ -827,3 +850,4 @@ document.addEventListener("change", (ev) => {
     setTimeout(() => refreshPresetSnapshot(), 0);
   }
 });
+
