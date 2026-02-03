@@ -54,7 +54,7 @@ async function httpJson(url, options = {}) {
   } catch {}
 
   if (!res.ok) {
-    const msg = (data && (data.error || data.message)) || text || `HTTP ${res.status}`;
+    const msg = (data && (data.message || data.error)) || text || `HTTP ${res.status}`;
     throw new Error(msg);
   }
 
@@ -293,24 +293,32 @@ async function previewPrompt() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
   setStatus("", "");
-  const payload = collectPayload(currentSchema);
-
-  // 同 generate：从“当前 Preset ID（用于 Jobs / 更新）”取
-  // 如果你的 input id 不是 presetId，把这里改成真实 id
+  // ✅ 强制：Preview 必须通过 Preset（不允许用当前表单直接 preview）
   const preset_id = (document.getElementById("presetId")?.value || "").trim();
-  if (!preset_id) throw new Error("missing_preset_id（请先选择/加载一个 Preset）");
+  if (!preset_id) throw new Error("missing_preset_id（必须先选择/加载一个 Preset）");
 
-  const body = {
-    pack_id: getPackId(),
-    pack_version: getPackVersion(),
-    stage: getStage(),
-    preset_id,
-    payload,
-  };
+  // 先读 preset 的事实：stage + payload
+  const pack_id = getPackId();
+  const pack_version = getPackVersion();
+  const presetGetUrl =
+    `${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}` +
+    `&pack_id=${encodeURIComponent(pack_id)}` +
+    `&pack_version=${encodeURIComponent(pack_version)}`;
 
+  const presetOut = await httpJson(presetGetUrl, { method: "GET" });
+  const item = presetOut.item;
+  if (!item) throw new Error("preset_get 返回为空（无法预览）");
+  if (!item.stage || !item.payload) throw new Error("Preset 缺少 stage/payload（无法预览）");
+
+  // 注意：/preview 合约仍然是 stage + payload（worker 不关心 preset 语义）
   const out = await httpJson(`${apiBase()}/preview`, {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      pack_id,
+      pack_version,
+      stage: item.stage,
+      payload: item.payload,
+    }),
   });
 
   $("previewOut").textContent = JSON.stringify(out, null, 2);
@@ -323,18 +331,14 @@ async function previewPrompt() {
 async function onGenerate() {
   if (!currentSchema) throw new Error("请先加载 Schema");
 
-  // preset_id：从 UI 的“当前 Preset ID（用于 Jobs / 更新）”输入框取
-  // 你截图里已经有这个输入框；这里假设它的 id 是 "presetId"（如果不同，把 id 改成你的实际值）
+  // ✅ 强制：Generate 必须通过 Preset（不允许 stage+payload 直发 generate）
   const preset_id = (document.getElementById("presetId")?.value || "").trim();
-  if (!preset_id) throw new Error("missing_preset_id（请先选择/加载一个 Preset）");
+  if (!preset_id) throw new Error("missing_preset_id（必须先选择/加载一个 Preset）");
 
-  // ✅ 保持现有生成方式：stage + payload（只多带一个事实字段 preset_id）
   const body = {
     pack_id: getPackId(),
     pack_version: getPackVersion(),
-    stage: getStage(),
     preset_id,
-    payload: collectPayload(currentSchema),
   };
 
   const out = await httpJson(`${apiBase()}/generate`, {
@@ -631,8 +635,87 @@ function setDefaults() {
 setDefaults();
 bindEvents();
 
+// ===== Preset Snapshot (read-only) =====
+async function refreshPresetSnapshot() {
+  const elRaw = document.getElementById("snapRaw");
+  const elBase = document.getElementById("snapBaseline");
 
+  const writeRaw = (obj) => {
+    if (!elRaw) return;
+    elRaw.textContent = (typeof obj === "string") ? obj : JSON.stringify(obj, null, 2);
+  };
+  const writeBase = (obj) => {
+    if (!elBase) return;
+    elBase.textContent = (obj == null) ? "(empty)" : JSON.stringify(obj, null, 2);
+  };
 
+  try {
+    const preset_id =
+      (document.getElementById("presetId")?.value || "").trim() ||
+      (document.getElementById("presetSelect")?.value || "").trim();
 
+    if (!preset_id) {
+      writeRaw({ ok: false, error: "preset_id 为空：先选择/加载一个 preset" });
+      return;
+    }
 
+    const url =
+      `${apiBase()}/preset/get` +
+      `?preset_id=${encodeURIComponent(preset_id)}` +
+      `&pack_id=${encodeURIComponent(getPackId())}` +
+      `&pack_version=${encodeURIComponent(getPackVersion())}`;
 
+    const out = await httpJson(url, { method: "GET" });
+
+    // 你的返回是 { ok:true, preset:{ item:{...} } }
+    const item =
+      out?.preset?.item ||
+      out?.item ||
+      out?.preset ||
+      out;
+
+    // raw 永远写出来，避免“无感”
+    writeRaw({ ok: true, preset: item });
+
+    const setVal = (id, v) => {
+      const x = document.getElementById(id);
+      if (x) x.value = (v ?? "");
+    };
+
+    setVal("snapPresetId", item?.id || preset_id);
+    setVal("snapEnabled", item?.enabled ?? "");
+    setVal("snapStage", item?.stage ?? "");
+    setVal("presetStageEnteredAt", item?.stage_entered_at || item?.stage_entered_iso || "");
+    setVal("snapDisabledReason", item?.disabled_reason || "");
+    setVal("snapDisabledAt", item?.disabled_at || item?.disabled_iso || "");
+    writeBase(item?.baseline_totals || null);
+
+  } catch (e) {
+    console.error(e);
+    writeRaw({ ok: false, error: e?.message || String(e) });
+  }
+}
+
+// 点击 preset/feedback 相关按钮后，刷新 snapshot（不影响原逻辑）
+document.addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button");
+  if (!btn) return;
+  const id = btn.id || "";
+
+  if (
+    id === "btnPresetLoadToForm" ||
+    id === "btnPresetUpdateFromForm" ||
+    id === "btnPresetRefresh" ||
+    id === "btnPresetCreate" ||
+    id === "btnFeedbackUpsert"
+  ) {
+    setTimeout(() => refreshPresetSnapshot(), 0);
+  }
+});
+
+// 选择 preset 变化也刷新
+document.addEventListener("change", (ev) => {
+  if (ev.target && ev.target.id === "presetSelect") {
+    setTimeout(() => refreshPresetSnapshot(), 0);
+  }
+});
