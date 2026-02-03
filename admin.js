@@ -23,6 +23,52 @@ function showError(e) {
   setFeedbackOut({ ok: false, error: msg });
 }
 
+function setFeedbackOut(objOrText) {
+  const el = document.getElementById("feedbackOut");
+  if (!el) return;
+  if (typeof objOrText === "string") {
+    el.textContent = objOrText;
+  } else {
+    el.textContent = JSON.stringify(objOrText, null, 2);
+  }
+}
+
+function renderEvaluationSummary(resp) {
+  const badge = document.getElementById("evalBadge");
+  const a = document.getElementById("evalAction");
+  const fs = document.getElementById("evalFromStage");
+  const ts = document.getElementById("evalToStage");
+  const rid = document.getElementById("evalRuleId");
+  const win = document.getElementById("evalWindow");
+  const m = document.getElementById("evalMetrics");
+
+  if (!badge || !a || !fs || !ts || !rid || !win || !m) return;
+
+  const ev = resp?.evaluation || {};
+  const action = ev.action || "none";
+
+  a.value = action;
+  fs.value = ev.from_stage || "";
+  ts.value = ev.to_stage || "";
+  rid.value = ev.rule_id || "";
+  win.value = ev.window || "";
+
+  const metrics = ev.metrics ?? null;
+  m.textContent = metrics ? JSON.stringify(metrics, null, 2) : "(empty)";
+
+  // 视觉徽标（不引导，不解释）
+  if (action === "advance") {
+    badge.textContent = `✅ ADVANCE：${ev.from_stage || ""} → ${ev.to_stage || ""}`;
+    badge.className = "ok";
+  } else if (action === "disable") {
+    badge.textContent = `⛔ DISABLE：${ev.from_stage || ""}（rule=${ev.rule_id || "n/a"}）`;
+    badge.className = "error";
+  } else {
+    badge.textContent = `… CONTINUE：继续观察（stage=${resp?.stage || ev.from_stage || ""}）`;
+    badge.className = "muted";
+  }
+}
+
 
 function escapeHtml(s) {
   return String(s)
@@ -669,6 +715,7 @@ async function onFeedbackUpsert() {
   });
 
   setFeedbackOut(out);
+  renderEvaluationSummary(out);
 
   const action = applyEvaluationSideEffects(out);
   await presetRefreshList();
@@ -764,6 +811,7 @@ document.addEventListener("click", (ev) => {
   if (up) { ev.preventDefault(); onFeedbackUpsert().catch(showError); }
   if (fill) { ev.preventDefault(); onFeedbackFillFromStats().catch(showError); }
 });
+
 
 
 
