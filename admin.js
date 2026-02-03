@@ -71,6 +71,70 @@ function renderEvaluationSummary(resp) {
   }
 }
 
+// ---------- Preset Snapshot（只读状态总览；不改 worker） ----------
+async function fetchPresetDetailForSnapshot(presetId) {
+  if (!presetId) return null;
+
+  const url =
+    `${apiBase()}/preset/get?preset_id=${encodeURIComponent(presetId)}` +
+    `&pack_id=${encodeURIComponent(getPackId())}` +
+    `&pack_version=${encodeURIComponent(getPackVersion())}`;
+
+  const out = await httpJson(url, { method: "GET" });
+  return out?.item || out?.preset || null;
+}
+
+function renderPresetSnapshot(preset) {
+  const hasAnyEl =
+    document.getElementById("snapPresetId") ||
+    document.getElementById("snapRaw") ||
+    document.getElementById("presetStageEnteredAt");
+  if (!hasAnyEl) return; // 未安装 Snapshot 面板则静默退出
+
+  const setVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = (v === null || v === undefined) ? "" : String(v);
+  };
+
+  setVal("snapPresetId", preset?.id || "");
+  setVal("snapEnabled", preset?.enabled);
+  setVal("snapStage", preset?.stage || "");
+  setVal("presetStageEnteredAt", preset?.stage_entered_at || "");
+
+  setVal("snapDisabledReason", preset?.disabled_reason || "");
+  setVal("snapDisabledAt", preset?.disabled_at || "");
+
+  const baseline = {
+    posts: preset?.baseline_posts_total ?? null,
+    views: preset?.baseline_views_total ?? null,
+    likes: preset?.baseline_likes_total ?? null,
+    collects: preset?.baseline_collects_total ?? null,
+    comments: preset?.baseline_comments_total ?? null,
+    dm_inbound: preset?.baseline_dm_inbound_total ?? null,
+  };
+
+  const baselineEl = document.getElementById("snapBaseline");
+  if (baselineEl) {
+    const hasAny = Object.values(baseline).some(v => v !== null);
+    baselineEl.textContent = hasAny ? JSON.stringify(baseline, null, 2) : "(empty)";
+  }
+
+  const rawEl = document.getElementById("snapRaw");
+  if (rawEl) rawEl.textContent = preset ? JSON.stringify(preset, null, 2) : "(empty)";
+}
+
+async function refreshPresetSnapshot(presetIdMaybe) {
+  try {
+    const presetId = presetIdMaybe || getEffectivePresetIdOrThrow();
+    const p = await fetchPresetDetailForSnapshot(presetId);
+    renderPresetSnapshot(p);
+  } catch {}
+}
+// ---------- Preset Snapshot end ----------
+
+
+
 
 function escapeHtml(s) {
   return String(s)
@@ -500,6 +564,7 @@ async function presetLoadSelectedToForm() {
   applyStageLock(currentSchema, getStage());
 
   setStatus("ok", `已加载 preset 到表单：${item.name || item.id}`);
+  await refreshPresetSnapshot(item.id);
 }
 
 
@@ -527,6 +592,7 @@ async function presetUpdateFromCurrentForm() {
 
   setStatus("ok", `Preset 已更新：preset_id=${preset_id}`);
   await presetRefreshList();
+  await refreshPresetSnapshot(preset_id);
 }
 
 // ---------- Jobs（只读） ----------
@@ -796,6 +862,7 @@ async function onFeedbackUpsert() {
 
   const action = applyEvaluationSideEffects(out);
   await presetRefreshList();
+  await refreshPresetSnapshot(out.preset_id || presetId);
 
   if (action === "advance") {
     try {
