@@ -17,8 +17,12 @@ let currentSchema = null;
 // ---------- 通用工具 ----------
 function showError(e) {
   console.error(e);
-  setStatus("error", e?.message || String(e));
+  const msg = e?.message || String(e);
+  setStatus("error", msg);
+  // 关键：把错误也写到 Feedback 卡片里，避免“无返回”的错觉
+  setFeedbackOut({ ok: false, error: msg });
 }
+
 
 function escapeHtml(s) {
   return String(s)
@@ -654,53 +658,58 @@ function applyEvaluationSideEffects(resp) {
 
 async function onFeedbackUpsert() {
   const presetId = getEffectivePresetIdOrThrow();
-
   const body = buildFeedbackUpsertBody(presetId);
 
   setStatus("info", "提交反馈中…");
+  setFeedbackOut({ ok: true, status: "submitting", body });
+
   const out = await httpJson(`${apiBase()}/feedback/upsert`, {
     method: "POST",
     body: JSON.stringify(body),
   });
 
-  // 展示返回（只读）
-  const el = document.getElementById("feedbackOut");
-  if (el) el.textContent = JSON.stringify(out, null, 2);
+  setFeedbackOut(out);
 
   const action = applyEvaluationSideEffects(out);
-
-  // 刷新 preset 列表（stage / enabled 可能变化）
   await presetRefreshList();
 
-  // 若是 advance：可选再把当前 preset 回填到表单（保持 UI 对齐）
-  // 若是 disable：不用回填
   if (action === "advance") {
-    // 尝试回填当前 preset（如果还可见）
     try {
       $("presetId").value = out.preset_id || presetId;
-      await presetLoadSelectedToForm(); // 若 presetSelect 为空也会用 presetId
-    } catch {
-      // 不强制
-    }
+      await presetLoadSelectedToForm();
+    } catch {}
   }
 
   setStatus("ok", `Feedback 已写入，evaluation.action=${action}`);
 }
+
+function setFeedbackOut(objOrText) {
+  const el = document.getElementById("feedbackOut");
+  if (!el) return;
+  if (typeof objOrText === "string") el.textContent = objOrText;
+  else el.textContent = JSON.stringify(objOrText, null, 2);
+}
+
 
 function bindFeedbackDefaults() {
   const d = document.getElementById("fbDate");
   if (d && !d.value) d.value = todayYmdLocal();
 }
 
-// 可选：你如果希望“用 Jobs 统计填充”为一个快捷键（不是必须）
 async function onFeedbackFillFromStats() {
   const presetId = getEffectivePresetIdOrThrow();
+
+  setStatus("info", "获取 Jobs stats 中…");
+  setFeedbackOut({ ok: true, status: "loading_jobs_stats", preset_id: presetId });
+
   const stats = await httpJson(buildJobsStatsUrl(presetId), { method: "GET" });
 
-  // 这里只做一个“事实填充”的示例：你也可以删掉这个按钮绑定
-  // 例如把 total 当 posts（不推荐），所以默认不写；仅保留接口通路验证
-  setStatus("ok", `已获取 stats：total=${stats.total}, generated=${stats.generated}, failed=${stats.failed}（未写入表单）`);
+  // 不把 stats 硬填到 Views/Likes（避免伪数据），但要可视化返回
+  setFeedbackOut({ ok: true, jobs_stats: stats });
+
+  setStatus("ok", `已获取 stats：total=${stats.total}, generated=${stats.generated}, failed=${stats.failed}`);
 }
+
 
 // ---------- 事件绑定 ----------
 function bindEvents() {
@@ -748,6 +757,15 @@ function setDefaults() {
 setDefaults();
 bindEvents();
 bindFeedbackDefaults();
+
+document.addEventListener("click", (ev) => {
+  const up = ev.target.closest("#btnFeedbackUpsert");
+  const fill = ev.target.closest("#btnFeedbackFillFromStats");
+  if (up) { ev.preventDefault(); onFeedbackUpsert().catch(showError); }
+  if (fill) { ev.preventDefault(); onFeedbackFillFromStats().catch(showError); }
+});
+
+
 
 
 
