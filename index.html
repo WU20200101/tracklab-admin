@@ -1,68 +1,148 @@
-<!DOCTYPE html>
-<html lang="zh">
+<!doctype html>
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>TrackLab Admin</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: sans-serif; padding: 12px; }
-    .card { border: 1px solid #ddd; padding: 12px; margin-bottom: 12px; }
-    .card h3 { margin-top: 0; }
-    label { display: block; margin-top: 6px; }
-    input, select, button, textarea { width: 100%; padding: 6px; margin-top: 4px; }
-    button { cursor: pointer; }
-    pre { background: #f6f6f6; padding: 8px; overflow: auto; }
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 0; background:#f6f7f9; color:#111827; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .row > div { flex: 1 1 220px; }
+    label { display:block; font-size: 12px; color:#6b7280; margin-bottom: 6px; }
+    input, select, textarea, button {
+      width: 100%; box-sizing: border-box;
+      border:1px solid #e5e7eb; border-radius: 10px;
+      padding: 10px; font-size: 14px; background: #fff;
+    }
+    textarea { min-height: 160px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    button { cursor:pointer; }
+    button.primary { background:#111827; color:#fff; border-color:#111827; }
+    .muted { color:#6b7280; font-size: 12px; }
+    .group { border-top: 1px dashed #e5e7eb; padding-top: 12px; margin-top: 12px; }
+    .field { margin-bottom: 10px; }
+    .checks { display:flex; gap:10px; flex-wrap:wrap; }
+    .check { display:flex; align-items:center; gap:6px; border:1px solid #e5e7eb; border-radius: 999px; padding: 6px 10px; }
+    .check input { width:auto; }
+    pre { white-space: pre-wrap; word-break: break-word; background:#0b1020; color:#e5e7eb; padding: 12px; border-radius: 12px; overflow:auto; }
+    .error { color:#b91c1c; font-size: 13px; }
+    .ok { color:#065f46; font-size: 13px; }
   </style>
 </head>
 <body>
+  <div class="wrap">
+    <div class="card">
+      <h2>TrackLab Admin (MVP)</h2>
+      <div class="muted">加载 schema → 预览 prompt（不拼 prompt，不写策略）</div>
+    </div>
 
-  <!-- ===== 你原有的 UI 保持不动 ===== -->
-  <div id="app"></div>
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>API Base</label>
+          <input id="apiBase" />
+        </div>
+        <div>
+          <label>Pack ID</label>
+          <input id="packId" value="xhs" />
+        </div>
+        <div>
+          <label>Pack Version</label>
+          <input id="packVer" value="v1.0.0" />
+        </div>
+        <div>
+          <label>Stage</label>
+          <select id="stage">
+            <option value="S0">S0</option>
+            <option value="S1">S1</option>
+            <option value="S2">S2</option>
+            <option value="S3">S3</option>
+          </select>
+        </div>
+      </div>
 
-  <!-- ===== 新增：反馈录入面板 ===== -->
-  <div class="card">
-    <h3>反馈录入（每日一次，总量）</h3>
+      <div style="margin-top:12px;display:flex;gap:10px;">
+        <button id="btnLoad" class="primary">加载 Schema</button>
+        <button id="btnPreview">预览 Prompt</button>
+        <button id="btnGenerate">Generate</button>
+      </div>
 
-    <label>
-      日期
-      <input type="date" id="fb_date" />
-    </label>
+      <pre id="genOut"></pre>
 
-    <label>已发布内容数
-      <input type="number" id="fb_posts" placeholder="posts total" />
-    </label>
+      <div id="status" style="margin-top:10px;"></div>
+    </div>
 
-    <label>阅读总量
-      <input type="number" id="fb_views" placeholder="views total" />
-    </label>
+    <!-- Preset -->
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Preset（角色 / 预设）</h3>
+      <div class="muted">只做事实写入与选择：/preset/create /preset/list /preset/get /preset/update（不淘汰，不推进阶段）</div>
 
-    <label>点赞总量
-      <input type="number" id="fb_likes" placeholder="likes total" />
-    </label>
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Preset Name</label>
+          <input id="presetName" placeholder="例如：test-1" />
+        </div>
+        <div>
+          <label>已存在 Presets（当前 pack/version/stage）</label>
+          <select id="presetSelect">
+            <option value="">(empty)</option>
+          </select>
+        </div>
+      </div>
 
-    <label>收藏总量
-      <input type="number" id="fb_collects" placeholder="collects total" />
-    </label>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnPresetCreate" class="primary" style="width:auto;padding:10px 14px;">保存为新 Preset</button>
+        <button id="btnPresetRefresh" style="width:auto;padding:10px 14px;">刷新 Preset 列表</button>
+        <button id="btnPresetUse" style="width:auto;padding:10px 14px;">使用所选 Preset（只用于 Jobs 查询）</button>
 
-    <label>评论总量
-      <input type="number" id="fb_comments" placeholder="comments total" />
-    </label>
+        <!-- ✅ 新增 -->
+        <button id="btnPresetLoadToForm" style="width:auto;padding:10px 14px;">加载所选 Preset 到表单</button>
+        <button id="btnPresetUpdateFromForm" class="primary" style="width:auto;padding:10px 14px;">用当前表单更新 Preset</button>
+      </div>
 
-    <label>私信/咨询总量
-      <input type="number" id="fb_dm" placeholder="dm inbound total" />
-    </label>
+      <div class="group">
+        <label>当前 Preset ID（用于 Jobs / 更新）</label>
+        <input id="presetId" placeholder="选择 preset 后自动填入" readonly />
+        <div class="muted">注意：Generate 仍然按你现在的方式（stage+payload），这里不改变 Generate 行为。</div>
+      </div>
+    </div>
 
-    <label>备注（可选）
-      <textarea id="fb_note" rows="2"></textarea>
-    </label>
+    <!-- Jobs（只读） -->
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Jobs（只读）</h3>
+      <div class="muted">只展示事实：统计 / 最近 20 条 / 点 job_id 看详情</div>
 
-    <button onclick="submitFeedback()">提交反馈并自动判定</button>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnJobsStats" style="width:auto;padding:10px 14px;">统计</button>
+        <button id="btnJobsList" class="primary" style="width:auto;padding:10px 14px;">最近 Jobs</button>
+      </div>
 
-    <h4>返回结果</h4>
-    <pre id="feedbackOut"></pre>
+      <div id="jobsStats" class="muted" style="margin-top:10px;">(empty)</div>
+
+      <div class="group">
+        <h4 style="margin:0 0 10px 0;">最近 20 条</h4>
+        <div id="jobsTable" class="muted">(empty)</div>
+      </div>
+
+      <div class="group">
+        <h4 style="margin:0 0 10px 0;">Job 详情</h4>
+        <pre id="jobDetail">(empty)</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>表单</h3>
+      <div id="formHost" class="muted">先点击「加载 Schema」</div>
+    </div>
+
+    <div class="card">
+      <h3>Preview 返回</h3>
+      <pre id="previewOut">(empty)</pre>
+    </div>
   </div>
 
-  <!-- ===== JS ===== -->
-  <script src="./admin.js?v=20260203a"></script>
+  <script src="./admin.js?v=20260202c"></script>
 </body>
 </html>
