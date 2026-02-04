@@ -7,6 +7,7 @@
  */
 
 const $ = (id) => document.getElementById(id);
+const EMPTY_TEXT = "请选择";
 
 let currentPreset = null; // preset/get item
 
@@ -55,7 +56,7 @@ async function httpJson(url, options = {}) {
 
 function apiBase() {
   const v = $("apiBase").value.trim().replace(/\/+$/, "");
-  if (!v) throw new Error("API Base 不能为空");
+  if (!v) throw new Error("接口地址不能为空");
   return v;
 }
 
@@ -66,33 +67,33 @@ function getPackId() {
 function getPackVersion() {
   // 兼容：旧版 id=packVer；新版可能改为 id=packVersion
   const el = $("packVer") || $("packVersion");
-  if (!el) throw new Error("Pack Version 控件缺失（id=packVer 或 packVersion）");
+  if (!el) throw new Error("版本号缺失");
   const v = (el.value || "").trim();
-  if (!v) throw new Error("Pack Version 不能为空");
+  if (!v) throw new Error("版本号不能为空");
   return v;
 }
 
 
 function getOwnerIdStrict() {
   const v = ($("ownerId").value || "").trim();
-  if (!v) throw new Error("owner_id 为空：先选择 Owner ID");
+  if (!v) throw new Error("用户名为空：先选择用户名");
   return v;
 }
 function getAccountIdStrict() {
   const v = ($("accountSelect").value || "").trim();
-  if (!v) throw new Error("account_id 为空：先选择 Account");
+  if (!v) throw new Error("账号为空：先选择账号");
   return v;
 }
 function getPresetIdStrict() {
   const v = ($("presetSelect").value || "").trim();
-  if (!v) throw new Error("preset_id 为空：先选择 Preset");
+  if (!v) throw new Error("角色为空：先选择角色");
   return v;
 }
 
 function ensurePresetEnabledForOps() {
-  if (!currentPreset) throw new Error("未加载 preset");
+  if (!currentPreset) throw new Error("未加载角色");
   if (Number(currentPreset.enabled) !== 1) {
-    throw new Error("该 preset 已淘汰（enabled=0），不可 preview/generate/feedback/outcome");
+    throw new Error("该角色已淘汰，不可预览脚本、生成内容、填写反馈、填写交易记录");
   }
 }
 
@@ -108,7 +109,7 @@ function setPre(id, obj) {
   const el = document.getElementById(id);
   if (!el) return; // 关键：删掉 UI 后不报错
   el.textContent =
-    obj == null ? "(empty)" : typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+    obj == null ? EMPTY_TEXT : typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
 }
 
 
@@ -129,7 +130,7 @@ function clearPresetsUI() {
   sel.innerHTML = "";
   const empty = document.createElement("option");
   empty.value = "";
-  empty.textContent = "(empty)";
+  empty.textContent = EMPTY_TEXT;
   sel.appendChild(empty);
 
   currentPreset = null;
@@ -140,7 +141,7 @@ function clearAccountsUI() {
   sel.innerHTML = "";
   const empty = document.createElement("option");
   empty.value = "";
-  empty.textContent = "(empty)";
+  empty.textContent = EMPTY_TEXT;
   sel.appendChild(empty);
 }
 
@@ -151,7 +152,7 @@ async function loadOwners() {
 
   const empty = document.createElement("option");
   empty.value = "";
-  empty.textContent = "请选择";
+  empty.textContent = EMPTY_TEXT;
   sel.appendChild(empty);
 
   const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
@@ -172,7 +173,7 @@ async function loadOwners() {
 async function accountList() {
   const owner_id = getOwnerIdStrict();
   const url = `${apiBase()}/account/list?owner_id=${encodeURIComponent(owner_id)}`;
-  setStatus("info", "刷新 accounts 中…");
+  setStatus("info", "账号刷新中…");
   const out = await httpJson(url, { method: "GET" });
 
   const items = out.items || [];
@@ -180,7 +181,7 @@ async function accountList() {
   sel.innerHTML = "";
   const empty = document.createElement("option");
   empty.value = "";
-  empty.textContent = items.length ? "请选择" : "(empty)";
+  empty.textContent = EMPTY_TEXT;
   sel.appendChild(empty);
 
   items.forEach((it) => {
@@ -213,14 +214,14 @@ async function accountCreate() {
     note: null,
   };
 
-  setStatus("info", "创建 account 中…");
+  setStatus("info", "账号创建中…");
   const out = await httpJson(`${apiBase()}/account/create`, {
     method: "POST",
     body: JSON.stringify(body),
   });
 
   setPre("accountOut", out);
-  setStatus("ok", `Account 已创建：${out?.account?.id || "na"}`);
+  setStatus("ok", `账号已创建：${out?.account?.id || "na"}`);
 
   await accountList();
 
@@ -252,7 +253,7 @@ async function presetRefreshList() {
   // ✅ 按 account 过滤（需要你 worker /preset/list 支持 account_id）
   if (account_id) url += `&account_id=${encodeURIComponent(account_id)}`;
 
-  setStatus("info", "刷新 presets 中…");
+  setStatus("info", "角色刷新中…");
   const out = await httpJson(url, { method: "GET" });
   const items = out.items || [];
 
@@ -260,7 +261,7 @@ async function presetRefreshList() {
   sel.innerHTML = "";
   const empty = document.createElement("option");
   empty.value = "";
-  empty.textContent = items.length ? "请选择" : "(empty)";
+  empty.textContent = EMPTY_TEXT;
   sel.appendChild(empty);
 
   items.forEach((it) => {
@@ -674,6 +675,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
