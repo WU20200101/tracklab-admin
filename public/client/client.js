@@ -521,20 +521,40 @@ async function outcomeUpsert() {
   if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
   ensurePresetEnabledForOps();
 
-  const body = {
-    pack_id: getPackId(),
-    pack_version: getPackVersion(),
-    account_id,
-    preset_id,
-    job_id: null,
-    date,
-    window: $("ocWindow").value || "daily",
-    lead_created: Number($("ocLeadCreated").value || 0),
-    paid: Number($("ocPaid").value || 0),
-    amount_yuan: Number($("ocAmountYuan").value || 0),
-    leads_count: Number($("ocLeadsCount").value || 0),
-    note: ($("ocNote").value || "").trim() || null,
-  };
+  // —— 业务一致性修正（必须）——
+const leadCreated = Number($("ocLeadCreated").value || 0);
+const paid = Number($("ocPaid").value || 0);
+
+let leadsCount = Number($("ocLeadsCount").value || 0);
+let amountYuan = Number($("ocAmountYuan").value || 0);
+
+// 规则：未新增客户 → 数量强制为 0
+if (leadCreated !== 1) {
+  leadsCount = 0;
+}
+
+// 规则：未新增成交 → 金额强制为 0
+if (paid !== 1) {
+  amountYuan = 0;
+}
+
+const body = {
+  pack_id: getPackId(),
+  pack_version: getPackVersion(),
+  account_id,
+  preset_id,
+  job_id: null,
+  date,
+  window: $("ocWindow").value || "daily",
+
+  lead_created: leadCreated,
+  paid: paid,
+  amount_yuan: amountYuan,
+  leads_count: leadsCount,
+
+  note: ($("ocNote").value || "").trim() || null,
+};
+
 
   setStatus("info", "outcome/upsert 提交中…");
   const out = await httpJson(`${apiBase()}/outcome/upsert`, {
@@ -641,6 +661,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
