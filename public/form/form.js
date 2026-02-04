@@ -1,351 +1,197 @@
-/* TrackLab Admin-Lite (Form)
- * 只用于：加载 schema -> 选择 preset -> 回填 -> 仅渲染当前 stage 可填字段 -> preset/update
- * 约束：不 preview，不 generate，不 feedback，不 jobs，不 outcomes
- */
-
-const $ = (id) => document.getElementById(id);
-
-let currentSchema = null;
-let currentPreset = null; // { id, stage, enabled, name, payload, ... }
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function setStatus(type, msg) {
-  const el = $("status");
-  if (!msg) { el.innerHTML = ""; return; }
-  el.innerHTML = `<div class="${type}">${escapeHtml(msg)}</div>`;
-}
-
-function setDebug(obj) {
-  $("debugOut").textContent = (obj == null) ? "(empty)" : JSON.stringify(obj, null, 2);
-}
-
-async function httpJson(url, options = {}) {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "content-type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
-
-  const text = await res.text();
-  let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch {}
-
-  if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || text || `HTTP ${res.status}`;
-    throw new Error(msg);
-  }
-  return data || {};
-}
-
-function apiBase() {
-  const v = $("apiBase").value.trim().replace(/\/+$/, "");
-  if (!v) throw new Error("API Base 不能为空");
-  return v;
-}
-function getPackId() {
-  const v = $("packId").value.trim();
-  if (!v) throw new Error("Pack ID 不能为空");
-  return v;
-}
-function getPackVersion() {
-  const v = $("packVer").value.trim();
-  if (!v) throw new Error("Pack Version 不能为空");
-  return v;
-}
-
-function stageOfCurrentPreset() {
-  return currentPreset?.stage || "S0";
-}
-
-function isFieldEditableInStage(field, stage) {
-  const editableStages = Array.isArray(field.editable_stages) ? field.editable_stages : null;
-  return !editableStages || editableStages.includes(stage);
-}
-
-/** 仅渲染“当前 stage 可填字段”。 */
-function renderSchemaLite(schema, stage) {
-  const host = $("formHost");
-  host.innerHTML = "";
-
-  if (!schema || !Array.isArray(schema.groups)) {
-    host.innerHTML = `<div class="error">schema 格式错误：缺少 groups</div>`;
-    return;
-  }
-
-  schema.groups.forEach((g) => {
-    const fields = (g.fields || []).filter((f) => isFieldEditableInStage(f, stage));
-    if (!fields.length) return;
-
-    const group = document.createElement("div");
-    group.className = "group";
-    group.innerHTML = `<h4>${escapeHtml(g.label || g.id || "group")}</h4>`;
-
-    fields.forEach((f) => {
-      const field = document.createElement("div");
-      field.className = "field";
-
-      const label = document.createElement("label");
-      label.textContent = `${f.label || f.key}${f.required ? " *" : ""}`;
-      field.appendChild(label);
-
-      if (f.type === "enum") {
-        const sel = document.createElement("select");
-        sel.name = f.key;
-
-        const empty = document.createElement("option");
-        empty.value = "";
-        empty.textContent = "请选择";
-        sel.appendChild(empty);
-
-        (f.options || []).forEach((opt) => {
-          const o = document.createElement("option");
-          o.value = opt.value;
-          o.textContent = opt.label || opt.value;
-          sel.appendChild(o);
-        });
-
-        field.appendChild(sel);
-      } else if (f.type === "multi_enum") {
-        const box = document.createElement("div");
-        box.className = "checks";
-
-        (f.options || []).forEach((opt) => {
-          const wrap = document.createElement("label");
-          wrap.className = "check";
-
-          const cb = document.createElement("input");
-          cb.type = "checkbox";
-          cb.name = f.key;
-          cb.value = opt.value;
-
-          const span = document.createElement("span");
-          span.textContent = opt.label || opt.value;
-
-          wrap.appendChild(cb);
-          wrap.appendChild(span);
-          box.appendChild(wrap);
-        });
-
-        field.appendChild(box);
-      } else {
-        const hint = document.createElement("div");
-        hint.className = "muted";
-        hint.textContent = `未支持字段类型：${f.type}（key=${f.key}）`;
-        field.appendChild(hint);
-      }
-
-      if (f.hint) {
-        const hint = document.createElement("div");
-        hint.className = "muted";
-        hint.textContent = f.hint;
-        field.appendChild(hint);
-      }
-
-      group.appendChild(field);
-    });
-
-    host.appendChild(group);
-  });
-}
-
-function applyPayloadToForm(schema, stage, payload) {
-  const p = payload || {};
-  schema.groups.forEach((g) => {
-    (g.fields || []).forEach((f) => {
-      if (!isFieldEditableInStage(f, stage)) return;
-
-      const key = f.key;
-
-      if (f.type === "enum") {
-        const sel = document.querySelector(`select[name="${CSS.escape(key)}"]`);
-        if (!sel) return;
-        sel.value = (key in p) ? String(p[key] ?? "") : "";
-      }
-
-      if (f.type === "multi_enum") {
-        const cbs = document.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(key)}"]`);
-        const want = new Set(Array.isArray(p[key]) ? p[key].map(String) : []);
-        cbs.forEach((cb) => (cb.checked = want.has(String(cb.value))));
-      }
-    });
-  });
-}
-
-/** 只收集“当前 stage 可填字段”；不可填字段完全不动（不会写回覆盖）。 */
-function collectPayloadFromForm(schema, stage, basePayload) {
-  const payload = { ...(basePayload || {}) };
-  const missing = [];
-
-  schema.groups.forEach((g) => {
-    (g.fields || []).forEach((f) => {
-      if (!isFieldEditableInStage(f, stage)) return;
-
-      const reqStages = Array.isArray(f.required_stages) ? f.required_stages : null;
-      const isRequiredNow = !!f.required && (!reqStages || reqStages.includes(stage));
-
-      if (f.type === "enum") {
-        const sel = document.querySelector(`select[name="${CSS.escape(f.key)}"]`);
-        const v = sel ? sel.value : "";
-        if (isRequiredNow && !v) missing.push(f.key);
-
-        // 写入规则：空值不写（保持原值）；有值覆盖
-        if (v) payload[f.key] = v;
-      }
-
-      if (f.type === "multi_enum") {
-        const checked = Array.from(
-          document.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(f.key)}"]:checked`)
-        ).map((x) => x.value);
-
-        if (isRequiredNow && checked.length === 0) missing.push(f.key);
-
-        if (checked.length) payload[f.key] = checked;
-      }
-    });
-  });
-
-  if (missing.length) throw new Error(`必填字段未填写：${missing.join(", ")}`);
-  return payload;
-}
-
-async function loadSchema() {
-  setStatus("info", "加载 schema 中…");
-  const url = `${apiBase()}/pack/${getPackId()}/${getPackVersion()}`;
-  const data = await httpJson(url, { method: "GET" });
-
-  const schema = data.ui_schema || data.schema || data;
-  currentSchema = schema;
-
-  // 未加载 preset 前，用 S0 渲染一个空壳（等加载 preset 后再重渲染）
-  renderSchemaLite(currentSchema, "S0");
-
-  setStatus("ok", "Schema 已加载");
-  setDebug({ ok: true, pack: { id: getPackId(), version: getPackVersion() }, has_groups: Array.isArray(schema?.groups) });
-}
-
-async function refreshPresetList() {
-  const pack_id = getPackId();
-  const pack_version = getPackVersion();
-  const stage = $("stageFilter").value;
-  const enabled = $("enabledOnly").value;
-
-  let url =
-    `${apiBase()}/preset/list?pack_id=${encodeURIComponent(pack_id)}` +
-    `&pack_version=${encodeURIComponent(pack_version)}`;
-
-  if (stage) url += `&stage=${encodeURIComponent(stage)}`;
-  if (enabled !== "") url += `&enabled=${encodeURIComponent(enabled)}`;
-
-  setStatus("info", "刷新 preset 列表中…");
-  const out = await httpJson(url, { method: "GET" });
-  const items = out.items || [];
-
-  const sel = $("presetSelect");
-  sel.innerHTML = "";
-  const empty = document.createElement("option");
-  empty.value = "";
-  empty.textContent = items.length ? "请选择" : "(empty)";
-  sel.appendChild(empty);
-
-  items.forEach((it) => {
-    const opt = document.createElement("option");
-    opt.value = it.id;
-    opt.textContent = `${it.name} [${it.stage}] (${it.updated_at || ""})`;
-    sel.appendChild(opt);
-  });
-
-  setStatus("ok", `Preset 列表已刷新：${items.length} 条`);
-  setDebug({ ok: true, items_count: items.length, first: items[0] || null });
-}
-
-async function loadPresetToForm() {
-  if (!currentSchema) throw new Error("请先加载 Schema");
-
-  const preset_id = $("presetSelect").value;
-  if (!preset_id) throw new Error("未选择 preset");
-
-  setStatus("info", "加载 preset 中…");
-  const url =
-    `${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}` +
-    `&pack_id=${encodeURIComponent(getPackId())}` +
-    `&pack_version=${encodeURIComponent(getPackVersion())}`;
-
-  const out = await httpJson(url, { method: "GET" });
-  const item = out.item;
-  if (!item) throw new Error("preset_get 返回为空");
-
-  currentPreset = item;
-  $("presetId").value = item.id || preset_id;
-  $("stageView").value = item.stage || "S0";
-
-  // 按 preset.stage 重新渲染“可填字段”
-  const st = stageOfCurrentPreset();
-  renderSchemaLite(currentSchema, st);
-  applyPayloadToForm(currentSchema, st, item.payload || {});
-
-  setStatus("ok", `已加载 preset：${item.name || item.id}`);
-  setDebug({ ok: true, preset: item });
-}
-
-async function savePresetFromForm() {
-  if (!currentSchema) throw new Error("请先加载 Schema");
-  if (!currentPreset?.id) throw new Error("请先加载一个 preset");
-
-  const st = stageOfCurrentPreset();
-
-  // 只覆盖当前 stage 可填字段；其他字段保留原 payload
-  const mergedPayload = collectPayloadFromForm(currentSchema, st, currentPreset.payload || {});
-
-  const body = {
-    pack_id: getPackId(),
-    pack_version: getPackVersion(),
-    stage: st,            // 同步写回“事实 stage”（不推进，只对齐）
-    payload: mergedPayload,
-  };
-
-  setStatus("info", "保存中…");
-  const out = await httpJson(`${apiBase()}/preset/update/${encodeURIComponent(currentPreset.id)}`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-
-  if (!out.ok) throw new Error("preset_update 未返回 ok");
-
-  // 刷新本地缓存（避免用户下一次保存基于旧 payload）
-  currentPreset.payload = mergedPayload;
-
-  setStatus("ok", "保存成功（preset 已更新）");
-  setDebug({ ok: true, updated: out, saved_payload_keys: Object.keys(mergedPayload) });
-}
-
-function showError(e) {
-  console.error(e);
-  setStatus("error", e?.message || String(e));
-}
-
-function setDefaults() {
-  $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
-  $("packId").value = "xhs";
-  $("packVer").value = "v1.0.0";
-  $("enabledOnly").value = "1";
-}
-
-function bindEvents() {
-  $("btnLoad").addEventListener("click", () => loadSchema().catch(showError));
-  $("btnRefreshPresets").addEventListener("click", () => refreshPresetList().catch(showError));
-  $("btnLoadPreset").addEventListener("click", () => loadPresetToForm().catch(showError));
-  $("btnSavePreset").addEventListener("click", () => savePresetFromForm().catch(showError));
-}
-
-setDefaults();
-bindEvents();
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TrackLab Admin-Lite (Form)</title>
+  <style>
+    :root{
+      --ink:#111827;
+      --muted:#6B7280;
+      --bg:#F6F7F9;
+      --card:#FFFFFF;
+      --line:#E5E7EB;
+      --brand:#0F172A;
+      --radius:14px;
+    }
+    body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:var(--bg); color:var(--ink); }
+    .wrap{ max-width: 1080px; margin: 24px auto; padding: 0 18px; }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(0,0,0,.04); padding: 18px; margin-bottom: 18px; }
+    h1{ margin:0 0 6px; font-size: 22px; }
+    .sub{ color:var(--muted); font-size: 13px; }
+    .grid3{ display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; }
+    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea{
+      width:100%;
+      box-sizing:border-box;
+      padding: 10px 12px;
+      border:1px solid var(--line);
+      border-radius: 12px;
+      outline:none;
+      background:#fff;
+      color:var(--ink);
+      font-size:14px;
+    }
+    input[readonly]{
+      background:#F3F4F6;
+      color:#374151;
+      cursor:not-allowed;
+    }
+    textarea{ min-height: 120px; resize: vertical; }
+    .row{ display:flex; align-items:center; gap:10px; }
+    .btn{
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn.primary{
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+    .sep{ height:1px; background: var(--line); margin: 14px 0; }
+    .titlebar{ display:flex; align-items:baseline; justify-content:space-between; gap: 12px; }
+    .status{ font-size: 13px; color: #059669; }
+    .status.err{ color:#DC2626; }
+    .blocktitle{ font-weight: 800; font-size: 18px; margin:0 0 10px; }
+    .stagehint{ color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .fieldcard{ border:1px dashed var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+    .fieldhead{ display:flex; justify-content:space-between; gap: 10px; margin-bottom: 8px; }
+    .pill{ font-size:12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    pre{
+      margin:0;
+      padding: 14px;
+      border-radius: 14px;
+      background: #0B1220;
+      color: #E5E7EB;
+      overflow:auto;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- ① 标题栏（对齐工作台） -->
+    <div class="card">
+      <div class="titlebar">
+        <div>
+          <h1>TrackLab Admin-Lite（Form）</h1>
+          <div class="sub">只做 preset 当前 stage 的表单填写/更新；不含 preview/generate/feedback/jobs/outcomes。</div>
+        </div>
+        <div id="status" class="status">就绪</div>
+      </div>
+    </div>
+
+    <!-- ② 接口/平台/版本（对齐工作台） -->
+    <div class="card">
+      <div class="grid3">
+        <div>
+          <label>接口地址</label>
+          <input id="apiBase" type="text" readonly />
+        </div>
+        <div>
+          <label>发布平台</label>
+          <select id="packId"></select>
+        </div>
+        <div>
+          <label>版本号</label>
+          <select id="packVersion"></select>
+        </div>
+      </div>
+      <div class="stagehint" id="schemaHint">Schema 未加载</div>
+    </div>
+
+    <!-- ③ 选择账号（对齐工作台） -->
+    <div class="card">
+      <div class="blocktitle">一、选择账号</div>
+      <div class="grid2">
+        <div>
+          <label>用户名</label>
+          <select id="ownerId"></select>
+        </div>
+        <div>
+          <label>账号</label>
+          <select id="accountSelect"></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ④ 选择角色（对齐工作台） -->
+    <div class="card">
+      <div class="blocktitle">二、选择角色</div>
+      <div class="grid3">
+        <div>
+          <label>选择角色范围</label>
+          <select id="onlyEnabled">
+            <option value="1" selected>仅有效角色</option>
+            <option value="">全部角色（含淘汰）</option>
+          </select>
+          <div class="stagehint">淘汰角色仅用于回看，不参与生成/提交。</div>
+        </div>
+        <div>
+          <label>按账号级别查看</label>
+          <select id="stageFilter">
+            <option value="">全部级别</option>
+            <option value="S0">S0</option>
+            <option value="S1">S1</option>
+            <option value="S2">S2</option>
+            <option value="S3">S3</option>
+          </select>
+        </div>
+        <div>
+          <label>角色</label>
+          <select id="presetSelect"></select>
+        </div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="grid3">
+        <div>
+          <label>当前 preset_id（只读）</label>
+          <input id="presetId" type="text" readonly />
+        </div>
+        <div>
+          <label>当前 stage（只读）</label>
+          <input id="presetStage" type="text" readonly />
+        </div>
+        <div>
+          <label>enabled（只读）</label>
+          <input id="presetEnabled" type="text" readonly />
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑤ 表单区 -->
+    <div class="card">
+      <div class="blocktitle">三、表单（自动回填；仅当前 stage 可编辑）</div>
+      <div class="sub">展示：stage ≤ 当前 stage 的字段；隐藏：未来字段。保存按钮在当前 stage 表单底部。</div>
+      <div class="sep"></div>
+
+      <div id="formContainer"></div>
+
+      <div class="row" style="margin-top:12px;">
+        <button id="btnSave" class="btn primary" disabled>保存当前阶段表单</button>
+        <span class="sub" id="saveHint">请选择账号与角色后编辑。</span>
+      </div>
+    </div>
+
+    <!-- ⑥ 调试：预览更新后的 prompt -->
+    <div class="card">
+      <div class="blocktitle">调试（预览更新后的 prompt）</div>
+      <pre id="debugPrompt">(empty)</pre>
+    </div>
+
+  </div>
+
+  <script src="./form.js?v=20260204a"></script>
+</body>
+</html>
