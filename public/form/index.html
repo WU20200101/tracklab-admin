@@ -1,197 +1,84 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
   <title>TrackLab Admin-Lite (Form)</title>
-  <style>
-    :root{
-      --ink:#111827;
-      --muted:#6B7280;
-      --bg:#F6F7F9;
-      --card:#FFFFFF;
-      --line:#E5E7EB;
-      --brand:#0F172A;
-      --radius:14px;
-    }
-    body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:var(--bg); color:var(--ink); }
-    .wrap{ max-width: 1080px; margin: 24px auto; padding: 0 18px; }
-    .card{ background:var(--card); border:1px solid var(--line); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(0,0,0,.04); padding: 18px; margin-bottom: 18px; }
-    h1{ margin:0 0 6px; font-size: 22px; }
-    .sub{ color:var(--muted); font-size: 13px; }
-    .grid3{ display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; }
-    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    label{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-    input, select, textarea{
-      width:100%;
-      box-sizing:border-box;
-      padding: 10px 12px;
-      border:1px solid var(--line);
-      border-radius: 12px;
-      outline:none;
-      background:#fff;
-      color:var(--ink);
-      font-size:14px;
-    }
-    input[readonly]{
-      background:#F3F4F6;
-      color:#374151;
-      cursor:not-allowed;
-    }
-    textarea{ min-height: 120px; resize: vertical; }
-    .row{ display:flex; align-items:center; gap:10px; }
-    .btn{
-      border: 1px solid var(--line);
-      background: #fff;
-      border-radius: 12px;
-      padding: 10px 14px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    .btn.primary{
-      background: var(--brand);
-      color: #fff;
-      border-color: var(--brand);
-    }
-    .sep{ height:1px; background: var(--line); margin: 14px 0; }
-    .titlebar{ display:flex; align-items:baseline; justify-content:space-between; gap: 12px; }
-    .status{ font-size: 13px; color: #059669; }
-    .status.err{ color:#DC2626; }
-    .blocktitle{ font-weight: 800; font-size: 18px; margin:0 0 10px; }
-    .stagehint{ color: var(--muted); font-size: 12px; margin-top: 6px; }
-    .fieldcard{ border:1px dashed var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
-    .fieldhead{ display:flex; justify-content:space-between; gap: 10px; margin-bottom: 8px; }
-    .pill{ font-size:12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-    pre{
-      margin:0;
-      padding: 14px;
-      border-radius: 14px;
-      background: #0B1220;
-      color: #E5E7EB;
-      overflow:auto;
-      font-size: 12px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-  </style>
+  <link rel="stylesheet" href="./base.css" />
 </head>
+
 <body>
-  <div class="wrap">
+  <!-- 标题栏 -->
+  <section class="card">
+    <h1>TrackLab Admin-Lite（Form）</h1>
+    <p class="muted">
+      仅用于填写 / 更新 preset 当前 stage 的表单字段；
+      不含 preview / generate / feedback / jobs / outcomes。
+    </p>
+  </section>
 
-    <!-- ① 标题栏（对齐工作台） -->
-    <div class="card">
-      <div class="titlebar">
-        <div>
-          <h1>TrackLab Admin-Lite（Form）</h1>
-          <div class="sub">只做 preset 当前 stage 的表单填写/更新；不含 preview/generate/feedback/jobs/outcomes。</div>
-        </div>
-        <div id="status" class="status">就绪</div>
+  <!-- 接口 / 平台 / 版本（只读） -->
+  <section class="card">
+    <div class="grid grid-3">
+      <div>
+        <label>接口地址</label>
+        <input id="apiBase" disabled />
+      </div>
+      <div>
+        <label>发布平台</label>
+        <select id="packId" disabled>
+          <option value="xhs">小红书</option>
+        </select>
+      </div>
+      <div>
+        <label>版本号</label>
+        <select id="packVersion" disabled>
+          <option value="v1.0.0">v1.0.0</option>
+        </select>
       </div>
     </div>
+  </section>
 
-    <!-- ② 接口/平台/版本（对齐工作台） -->
-    <div class="card">
-      <div class="grid3">
-        <div>
-          <label>接口地址</label>
-          <input id="apiBase" type="text" readonly />
-        </div>
-        <div>
-          <label>发布平台</label>
-          <select id="packId"></select>
-        </div>
-        <div>
-          <label>版本号</label>
-          <select id="packVersion"></select>
-        </div>
+  <!-- 选择账号 -->
+  <section class="card">
+    <h2>一、选择账号</h2>
+    <div class="grid grid-2">
+      <div>
+        <label>用户名</label>
+        <select id="ownerSelect"></select>
       </div>
-      <div class="stagehint" id="schemaHint">Schema 未加载</div>
-    </div>
-
-    <!-- ③ 选择账号（对齐工作台） -->
-    <div class="card">
-      <div class="blocktitle">一、选择账号</div>
-      <div class="grid2">
-        <div>
-          <label>用户名</label>
-          <select id="ownerId"></select>
-        </div>
-        <div>
-          <label>账号</label>
-          <select id="accountSelect"></select>
-        </div>
+      <div>
+        <label>账号</label>
+        <select id="accountSelect"></select>
       </div>
     </div>
+  </section>
 
-    <!-- ④ 选择角色（对齐工作台） -->
-    <div class="card">
-      <div class="blocktitle">二、选择角色</div>
-      <div class="grid3">
-        <div>
-          <label>选择角色范围</label>
-          <select id="onlyEnabled">
-            <option value="1" selected>仅有效角色</option>
-            <option value="">全部角色（含淘汰）</option>
-          </select>
-          <div class="stagehint">淘汰角色仅用于回看，不参与生成/提交。</div>
-        </div>
-        <div>
-          <label>按账号级别查看</label>
-          <select id="stageFilter">
-            <option value="">全部级别</option>
-            <option value="S0">S0</option>
-            <option value="S1">S1</option>
-            <option value="S2">S2</option>
-            <option value="S3">S3</option>
-          </select>
-        </div>
-        <div>
-          <label>角色</label>
-          <select id="presetSelect"></select>
-        </div>
-      </div>
-
-      <div class="sep"></div>
-
-      <div class="grid3">
-        <div>
-          <label>当前 preset_id（只读）</label>
-          <input id="presetId" type="text" readonly />
-        </div>
-        <div>
-          <label>当前 stage（只读）</label>
-          <input id="presetStage" type="text" readonly />
-        </div>
-        <div>
-          <label>enabled（只读）</label>
-          <input id="presetEnabled" type="text" readonly />
-        </div>
+  <!-- 选择角色 / Preset -->
+  <section class="card">
+    <h2>二、选择角色</h2>
+    <div class="grid grid-3">
+      <div>
+        <label>角色</label>
+        <select id="presetSelect"></select>
       </div>
     </div>
+  </section>
 
-    <!-- ⑤ 表单区 -->
-    <div class="card">
-      <div class="blocktitle">三、表单（自动回填；仅当前 stage 可编辑）</div>
-      <div class="sub">展示：stage ≤ 当前 stage 的字段；隐藏：未来字段。保存按钮在当前 stage 表单底部。</div>
-      <div class="sep"></div>
-
-      <div id="formContainer"></div>
-
-      <div class="row" style="margin-top:12px;">
-        <button id="btnSave" class="btn primary" disabled>保存当前阶段表单</button>
-        <span class="sub" id="saveHint">请选择账号与角色后编辑。</span>
-      </div>
+  <!-- 表单 -->
+  <section class="card">
+    <h2>三、表单（自动回填；仅当前 stage 可编辑）</h2>
+    <div id="formContainer"></div>
+    <div id="saveBar" class="hidden">
+      <button id="saveBtn">保存当前阶段表单</button>
     </div>
+  </section>
 
-    <!-- ⑥ 调试：预览更新后的 prompt -->
-    <div class="card">
-      <div class="blocktitle">调试（预览更新后的 prompt）</div>
-      <pre id="debugPrompt">(empty)</pre>
-    </div>
+  <!-- 调试 / Prompt 预览 -->
+  <section class="card">
+    <h2>调试（预览更新后的 prompt）</h2>
+    <pre id="promptPreview">(empty)</pre>
+  </section>
 
-  </div>
-
-  <script src="./form.js?v=20260204a"></script>
+  <script src="./form.js"></script>
 </body>
 </html>
