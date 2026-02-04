@@ -148,7 +148,7 @@ async function loadOwners() {
   const empty = document.createElement("option");
   empty.value = "";
   empty.textContent = "请选择";
-  sel.appendChild = "请选择";
+  sel.appendChild(empty);
 
   const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
   const items = out.items || [];
@@ -288,6 +288,7 @@ async function presetLoad() {
 }
 
 async function presetBindAccount() {
+  const preset_id = getPresetIdStrict();
   const account_id = getAccountIdStrict();
 
   const body = {
@@ -523,10 +524,6 @@ function bindEvents() {
     handleAccountChanged().catch(showError);
   });
 
-  // 你要隐藏 load/绑定按钮就用 ?. 或删掉
-  $("btnPresetLoad")?.addEventListener("click", () => presetLoad().catch(showError));
-  $("btnPresetBindAccount")?.addEventListener("click", () => presetBindAccount().catch(showError));
-
   $("btnPreview").addEventListener("click", () => previewPrompt().catch(showError));
   $("btnGenerate").addEventListener("click", () => generateContent().catch(showError));
 
@@ -559,6 +556,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
