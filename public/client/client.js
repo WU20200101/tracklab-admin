@@ -85,6 +85,13 @@ function getPresetIdStrict() {
   return v;
 }
 
+function ensurePresetEnabledForOps() {
+  if (!currentPreset) throw new Error("未加载 preset");
+  if (Number(currentPreset.enabled) !== 1) {
+    throw new Error("该 preset 已淘汰（enabled=0），不可 preview/generate/feedback/outcome");
+  }
+}
+
 function setPre(id, obj) {
   const el = document.getElementById(id);
   if (!el) return; // 关键：删掉 UI 后不报错
@@ -272,6 +279,7 @@ async function presetLoad() {
   currentPreset = out.item;
   setPre("presetOut", out.item);
   setStatus("ok", `Preset 已加载：${out.item.name || out.item.id}`);
+  applyEnabledUi(out.item.enabled);
 }
 
 async function presetBindAccount() {
@@ -301,6 +309,7 @@ async function presetBindAccount() {
 async function previewPrompt() {
   
   if (!currentPreset?.id) await presetLoad();
+  ensurePresetEnabledForOps();
 
   const out = await httpJson(`${apiBase()}/preview`, {
     method: "POST",
@@ -345,6 +354,19 @@ function formatClientText(outputObj) {
 
 async function generateContent() {
   const preset_id = getPresetIdStrict();
+  const preset_id = getPresetIdStrict();
+  if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+  ensurePresetEnabledForOps();
+
+  function applyEnabledUi(enabled) {
+  const disabled = Number(enabled) !== 1;
+
+  // 这些按钮可能存在/不存在（你在精简 UI），用 ?. 防空
+  $("btnPreview") && ($("btnPreview").disabled = disabled);
+  $("btnGenerate") && ($("btnGenerate").disabled = disabled);
+  $("btnFeedbackUpsert") && ($("btnFeedbackUpsert").disabled = disabled);
+  $("btnOutcomeUpsert") && ($("btnOutcomeUpsert").disabled = disabled);
+}
 
   setStatus("info", "Generate 中…");
   const out = await httpJson(`${apiBase()}/generate`, {
@@ -541,6 +563,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
