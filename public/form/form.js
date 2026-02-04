@@ -239,6 +239,25 @@ async function presetLoadAndRender(){
   setStatus("ok","角色已加载");
 }
 
+function getAllFieldsFromSchema(schema){
+  if (!schema) return [];
+  // v1: { fields: [...] }
+  if (Array.isArray(schema.fields)) return schema.fields.map(f=>({ ...f }));
+  // v2: { groups: [{id,label,fields:[...]}] }
+  if (Array.isArray(schema.groups)){
+    const out = [];
+    for (const g of schema.groups){
+      const glabel = g.label || g.id || "";
+      const gfields = Array.isArray(g.fields) ? g.fields : [];
+      for (const f of gfields){
+        out.push({ ...f, __group: glabel });
+      }
+    }
+    return out;
+  }
+  return [];
+}
+
 /** ------- 表单渲染规则 ------- **/
 function renderForm(){
   const c = $("formContainer");
@@ -248,13 +267,12 @@ function renderForm(){
     return;
   }
 
-  const fields = uiSchema?.fields || [];
+  const fields = getAllFieldsFromSchema(uiSchema);
   const curRank = stageRank(currentStage);
 
   // 只展示 stage <= 当前 stage 的字段（按 min(editable_stages) 判断）
   const visible = fields.filter(f=>{
-    const first = minStage(f.editable_stages);
-    if (!first) return false;
+    const first = minStage(f.editable_stages) || "S0";
     return stageRank(first) <= curRank;
   });
 
@@ -452,5 +470,6 @@ function escapeHtml(s){
 }
 
 boot().catch(e=>setStatus("err", e.message));
+
 
 
