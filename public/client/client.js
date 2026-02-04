@@ -299,6 +299,7 @@ async function presetBindAccount() {
 }
 
 async function previewPrompt() {
+  
   if (!currentPreset?.id) await presetLoad();
 
   const out = await httpJson(`${apiBase()}/preview`, {
@@ -513,7 +514,6 @@ function bindEvents() {
 
   $("btnFeedbackUpsert").addEventListener("click", () => feedbackUpsert().catch(showError));
   $("btnOutcomeUpsert").addEventListener("click", () => outcomeUpsert().catch(showError));
-  $("btnStatsPreset")?.addEventListener("click", () => statsPreset().catch(showError));
 
   // 保留：选 preset 自动加载
   $("presetSelect").addEventListener("change", () => {
@@ -541,6 +541,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
