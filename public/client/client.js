@@ -64,8 +64,14 @@ function getPackId() {
 }
 
 function getPackVersion() {
-  return $("packVersion").value;
+  // 兼容：旧版 id=packVer；新版可能改为 id=packVersion
+  const el = $("packVer") || $("packVersion");
+  if (!el) throw new Error("Pack Version 控件缺失（id=packVer 或 packVersion）");
+  const v = (el.value || "").trim();
+  if (!v) throw new Error("Pack Version 不能为空");
+  return v;
 }
+
 
 function getOwnerIdStrict() {
   const v = ($("ownerId").value || "").trim();
@@ -610,34 +616,43 @@ async function handleAccountChanged() {
 }
 
 function setDefaults() {
-  $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
-  $("packId").value = "xhs";
-  $("packVer").value = "v1.0.0";
-  $("enabledOnly").value = "1";
-  ensureDateDefault("fbDate");
-  ensureDateDefault("ocDate");
+  const setVal = (id, val) => {
+    const el = $(id);
+    if (el) el.value = val;
+  };
+
+  setVal("apiBase", "https://tracklab-api.wuxiaofei1985.workers.dev");
+  setVal("packId", "xhs");
+
+  if ($("packVer")) setVal("packVer", "v1.0.0");
+  if ($("packVersion")) setVal("packVersion", "v1.0.0");
+
+  setVal("enabledOnly", "1"); // 不存在就跳过
+
+  if ($("fbDate")) ensureDateDefault("fbDate");
+  if ($("ocDate")) ensureDateDefault("ocDate");
 }
 
 function bindEvents() {
-  $("ownerId").addEventListener("change", () => {
-    handleOwnerChanged().catch(showError);
-  });
+  $("ownerId")?.addEventListener("change", () => handleOwnerChanged().catch(showError));
+  $("accountSelect")?.addEventListener("change", () => handleAccountChanged().catch(showError));
+  $("presetSelect")?.addEventListener("change", () => presetLoad().catch(showError));
 
-  $("accountSelect").addEventListener("change", () => {
-    handleAccountChanged().catch(showError);
-  });
+  $("btnAccountRefresh")?.addEventListener("click", () => accountList().catch(showError));
+  $("btnAccountCreate")?.addEventListener("click", () => accountCreate().catch(showError));
 
-  $("btnPreview").addEventListener("click", () => previewPrompt().catch(showError));
-  $("btnGenerate").addEventListener("click", () => generateContent().catch(showError));
+  $("btnPresetRefresh")?.addEventListener("click", () => presetRefreshList().catch(showError));
+  $("btnPresetLoad")?.addEventListener("click", () => presetLoad().catch(showError));
+  $("btnPresetBindAccount")?.addEventListener("click", () => presetBindAccount().catch(showError));
 
-  $("btnFeedbackUpsert").addEventListener("click", () => feedbackUpsert().catch(showError));
-  $("btnOutcomeUpsert").addEventListener("click", () => outcomeUpsert().catch(showError));
+  $("btnPreview")?.addEventListener("click", () => previewPrompt().catch(showError));
+  $("btnGenerate")?.addEventListener("click", () => generateContent().catch(showError));
 
-  // 保留：选 preset 自动加载
-  $("presetSelect").addEventListener("change", () => {
-    presetLoad().catch(showError);
-  });
+  $("btnFeedbackUpsert")?.addEventListener("click", () => feedbackUpsert().catch(showError));
+  $("btnOutcomeUpsert")?.addEventListener("click", () => outcomeUpsert().catch(showError));
+  $("btnStatsPreset")?.addEventListener("click", () => statsPreset().catch(showError));
 }
+
 
 
 /** 启动：先加载 owners，再按 localStorage 恢复联动 */
@@ -659,6 +674,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
