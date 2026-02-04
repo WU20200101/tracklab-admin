@@ -1,56 +1,17 @@
-/* TrackLab Client
- * - 选择 account / preset
- * - preview prompt（通过 preset 读取 stage+payload）
- * - generate（preset_id）
- * - feedback/upsert（累计）-> 展示 evaluation
- * - outcome/upsert + stats/preset
+/* TrackLab Client (Updated v2026-02-04)
+ * - Owner ID 下拉：从 /owner/list 拉取（真实 D1）
+ * - Owner change -> 自动刷新 accounts，并清空 presets
+ * - Account change -> 自动刷新 presets（带 account_id 过滤）
+ * - presetRefreshList 修复语法问题（函数体完整）
+ * - 保留：preview / generate / feedback / outcome / stats
  */
 
 const $ = (id) => document.getElementById(id);
 
 let currentPreset = null; // preset/get item
 
-const OWNER_IDS = [
-  "wuxiaofei",
-  "wife",
-  "ops1",
-  "test_owner_01",
-  "test_owner_02",
-];
-
 const LS_OWNER_KEY = "tracklab_owner_id";
-
-function renderOwnerSelect() {
-  const sel = $("ownerId");
-  sel.innerHTML = "";
-
-  const saved = localStorage.getItem(LS_OWNER_KEY) || "";
-  const list = OWNER_IDS.slice();
-
-  // 如果 saved 不在列表里，仍然保留（避免你改了列表后丢失）
-  if (saved && !list.includes(saved)) list.unshift(saved);
-
-  // 空占位
-  const empty = document.createElement("option");
-  empty.value = "";
-  empty.textContent = "请选择";
-  sel.appendChild(empty);
-
-  list.forEach((id) => {
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = id;
-    sel.appendChild(opt);
-  });
-
-  if (saved) sel.value = saved;
-}
-
-function bindOwnerPersist() {
-  $("ownerId").addEventListener("change", () => {
-    localStorage.setItem(LS_OWNER_KEY, $("ownerId").value || "");
-  });
-}
+const LS_ACCOUNT_KEY = "tracklab_account_id";
 
 function escapeHtml(s) {
   return String(s)
@@ -63,7 +24,10 @@ function escapeHtml(s) {
 
 function setStatus(type, msg) {
   const el = $("status");
-  if (!msg) { el.innerHTML = ""; return; }
+  if (!msg) {
+    el.innerHTML = "";
+    return;
+  }
   el.innerHTML = `<div class="${type}">${escapeHtml(msg)}</div>`;
 }
 
@@ -78,7 +42,9 @@ async function httpJson(url, options = {}) {
 
   const text = await res.text();
   let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch {}
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {}
 
   if (!res.ok) {
     const msg = (data && (data.message || data.error)) || text || `HTTP ${res.status}`;
@@ -105,7 +71,7 @@ function getPackVersion() {
 
 function getOwnerIdStrict() {
   const v = ($("ownerId").value || "").trim();
-  if (!v) throw new Error("owner_id 为空：先填 Owner ID");
+  if (!v) throw new Error("owner_id 为空：先选择 Owner ID");
   return v;
 }
 function getAccountIdStrict() {
@@ -120,7 +86,8 @@ function getPresetIdStrict() {
 }
 
 function setPre(id, obj) {
-  $(id).textContent = (obj == null) ? "(empty)" : (typeof obj === "string" ? obj : JSON.stringify(obj, null, 2));
+  $(id).textContent =
+    obj == null ? "(empty)" : typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
 }
 
 function todayYMD() {
@@ -130,10 +97,57 @@ function todayYMD() {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-
 function ensureDateDefault(id) {
   const el = $(id);
   if (el && !el.value) el.value = todayYMD();
+}
+
+function clearPresetsUI() {
+  const sel = $("presetSelect");
+  sel.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "(empty)";
+  sel.appendChild(empty);
+
+  currentPreset = null;
+  setPre("presetOut", "(empty)");
+}
+
+function clearAccountsUI() {
+  const sel = $("accountSelect");
+  sel.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "(empty)";
+  sel.appendChild(empty);
+
+  setPre("accountOut", "(empty)");
+}
+
+async function loadOwners() {
+  // Owner 下拉来自 D1（/owner/list）
+  const sel = $("ownerId");
+  sel.innerHTML = "";
+
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "请选择";
+  sel.appendChild(empty);
+
+  const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
+  const items = out.items || [];
+
+  items.forEach((id) => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    sel.appendChild(opt);
+  });
+
+  // 还原上次选择（如果仍存在）
+  const saved = localStorage.getItem(LS_OWNER_KEY) || "";
+  if (saved && items.includes(saved)) sel.value = saved;
 }
 
 async function accountList() {
@@ -158,6 +172,13 @@ async function accountList() {
   });
 
   setPre("accountOut", out);
+
+  // 还原上次 account（同一 owner 下）
+  const savedAccount = localStorage.getItem(LS_ACCOUNT_KEY) || "";
+  if (savedAccount && items.some((x) => x.id === savedAccount)) {
+    sel.value = savedAccount;
+  }
+
   setStatus("ok", `Accounts：${items.length} 个`);
 }
 
@@ -181,8 +202,16 @@ async function accountCreate() {
 
   setPre("accountOut", out);
   setStatus("ok", `Account 已创建：${out?.account?.id || "na"}`);
+
   await accountList();
-  if (out?.account?.id) $("accountSelect").value = out.account.id;
+
+  if (out?.account?.id) {
+    $("accountSelect").value = out.account.id;
+    localStorage.setItem(LS_ACCOUNT_KEY, out.account.id);
+  }
+
+  // 创建后立即刷新 presets（按新 account 过滤）
+  await presetRefreshList();
 }
 
 async function presetRefreshList() {
@@ -191,7 +220,7 @@ async function presetRefreshList() {
   const stage = $("stageFilter").value;
   const enabled = $("enabledOnly").value;
 
-  // 取当前选择的 account_id（没选就空）
+  // 取当前选择的 account_id（没选就不带过滤，兼容旧行为）
   const account_id = ($("accountSelect").value || "").trim();
 
   let url =
@@ -201,7 +230,7 @@ async function presetRefreshList() {
   if (stage) url += `&stage=${encodeURIComponent(stage)}`;
   if (enabled !== "") url += `&enabled=${encodeURIComponent(enabled)}`;
 
-  // 新增：按 account 过滤
+  // ✅ 按 account 过滤（需要你 worker /preset/list 支持 account_id）
   if (account_id) url += `&account_id=${encodeURIComponent(account_id)}`;
 
   setStatus("info", "刷新 presets 中…");
@@ -225,7 +254,6 @@ async function presetRefreshList() {
   setPre("presetOut", { ok: true, items_count: items.length });
   setStatus("ok", `Presets：${items.length} 条`);
 }
-
 
 async function presetLoad() {
   const preset_id = getPresetIdStrict();
@@ -262,10 +290,12 @@ async function presetBindAccount() {
 
   setPre("accountOut", out);
   setStatus("ok", "绑定完成");
+
+  // 绑定后刷新列表，确保只剩属于该 account 的 presets
+  await presetRefreshList();
 }
 
 async function previewPrompt() {
-  // 和你 admin.js 一致：preview 必须基于 preset 的 stage+payload
   if (!currentPreset?.id) await presetLoad();
 
   const out = await httpJson(`${apiBase()}/preview`, {
@@ -278,7 +308,6 @@ async function previewPrompt() {
     }),
   });
 
-  // 只展示 prompt_text，避免 JSON 干扰
   setPre("previewOut", out?.prompt_text || JSON.stringify(out, null, 2));
   setStatus("ok", "Preview 成功");
 }
@@ -292,13 +321,13 @@ function pick(obj, keys) {
 
 function normalizeTags(v) {
   if (v == null) return "";
-  if (Array.isArray(v)) return v.map(String).map((x) => x.startsWith("#") ? x : `#${x}`).join(" ");
+  if (Array.isArray(v))
+    return v.map(String).map((x) => (x.startsWith("#") ? x : `#${x}`)).join(" ");
   const s = String(v).trim();
   if (!s) return "";
-  // 若是用空格/逗号分隔的裸 tag，做一个轻量兜底
   const parts = s.split(/[\s,，]+/).filter(Boolean);
   if (parts.length <= 1) return s.startsWith("#") ? s : `#${s}`;
-  return parts.map((x) => x.startsWith("#") ? x : `#${x}`).join(" ");
+  return parts.map((x) => (x.startsWith("#") ? x : `#${x}`)).join(" ");
 }
 
 function formatClientText(outputObj) {
@@ -323,10 +352,7 @@ async function generateContent() {
     }),
   });
 
-  // raw
   setPre("genRaw", out);
-
-  // formatted text
   const outputObj = out?.output || {};
   setPre("genText", formatClientText(outputObj));
 
@@ -371,8 +397,10 @@ async function feedbackUpsert() {
 
   setPre("evalOut", out?.evaluation || out);
 
-  // 如果 advance：刷新 preset 状态（拿到新 stage）
-  try { await presetLoad(); } catch {}
+  // advance 后刷新 preset 事实
+  try {
+    await presetLoad();
+  } catch {}
 
   setStatus("ok", `feedback 已写入；action=${out?.evaluation?.action || "none"}`);
 }
@@ -392,7 +420,7 @@ async function outcomeUpsert() {
     preset_id,
     job_id: null,
     date,
-    window: ($("ocWindow").value || "daily"),
+    window: $("ocWindow").value || "daily",
     lead_created: Number($("ocLeadCreated").value || 0),
     paid: Number($("ocPaid").value || 0),
     amount_cents: Number($("ocAmountCents").value || 0),
@@ -426,6 +454,35 @@ function showError(e) {
   setStatus("error", e?.message || String(e));
 }
 
+async function handleOwnerChanged() {
+  const owner = ($("ownerId").value || "").trim();
+  localStorage.setItem(LS_OWNER_KEY, owner);
+  localStorage.removeItem(LS_ACCOUNT_KEY);
+
+  clearAccountsUI();
+  clearPresetsUI();
+
+  if (!owner) return;
+  await accountList();
+
+  // accountList 可能恢复了上次 account；同步保存
+  const currentAccount = ($("accountSelect").value || "").trim();
+  if (currentAccount) localStorage.setItem(LS_ACCOUNT_KEY, currentAccount);
+
+  // 有 account 才刷新 presets（否则 list 会是全量 enabled=1）
+  if (currentAccount) await presetRefreshList();
+}
+
+async function handleAccountChanged() {
+  const account = ($("accountSelect").value || "").trim();
+  localStorage.setItem(LS_ACCOUNT_KEY, account);
+
+  clearPresetsUI();
+  if (!account) return;
+
+  await presetRefreshList();
+}
+
 function setDefaults() {
   $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
   $("packId").value = "xhs";
@@ -436,6 +493,14 @@ function setDefaults() {
 }
 
 function bindEvents() {
+  $("ownerId").addEventListener("change", () => {
+    handleOwnerChanged().catch(showError);
+  });
+
+  $("accountSelect").addEventListener("change", () => {
+    handleAccountChanged().catch(showError);
+  });
+
   $("btnAccountRefresh").addEventListener("click", () => accountList().catch(showError));
   $("btnAccountCreate").addEventListener("click", () => accountCreate().catch(showError));
 
@@ -449,17 +514,24 @@ function bindEvents() {
   $("btnFeedbackUpsert").addEventListener("click", () => feedbackUpsert().catch(showError));
   $("btnOutcomeUpsert").addEventListener("click", () => outcomeUpsert().catch(showError));
   $("btnStatsPreset").addEventListener("click", () => statsPreset().catch(showError));
-
-  $("accountSelect").addEventListener("change", () => {
-  presetRefreshList().catch(showError);
-});
 }
 
-setDefaults();
-bindEvents();
+/** 启动：先加载 owners，再按 localStorage 恢复联动 */
+async function boot() {
+  setDefaults();
+  bindEvents();
 
-renderOwnerSelect();
-bindOwnerPersist();
+  setStatus("info", "初始化 owners 中…");
+  await loadOwners();
 
+  // 如果已经有保存的 owner，触发一次联动加载
+  const savedOwner = localStorage.getItem(LS_OWNER_KEY) || "";
+  if (savedOwner) {
+    $("ownerId").value = savedOwner;
+    await handleOwnerChanged();
+  }
 
+  setStatus("ok", "就绪");
+}
 
+boot().catch(showError);
