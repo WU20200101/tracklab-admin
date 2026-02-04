@@ -1,4 +1,5 @@
 /* /public/form/form.js */
+const EMPTY_TEXT = "请选择";
 
 function $(id){ return document.getElementById(id); }
 
@@ -449,4 +450,5 @@ function escapeHtml(s){
 }
 
 boot().catch(e=>setStatus("err", e.message));
+
 
