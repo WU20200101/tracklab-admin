@@ -10,6 +10,48 @@ const $ = (id) => document.getElementById(id);
 
 let currentPreset = null; // preset/get item
 
+const OWNER_IDS = [
+  "wuxiaofei",
+  "wife",
+  "ops1",
+  "test_owner_01",
+  "test_owner_02",
+];
+
+const LS_OWNER_KEY = "tracklab_owner_id";
+
+function renderOwnerSelect() {
+  const sel = $("ownerId");
+  sel.innerHTML = "";
+
+  const saved = localStorage.getItem(LS_OWNER_KEY) || "";
+  const list = OWNER_IDS.slice();
+
+  // 如果 saved 不在列表里，仍然保留（避免你改了列表后丢失）
+  if (saved && !list.includes(saved)) list.unshift(saved);
+
+  // 空占位
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "请选择";
+  sel.appendChild(empty);
+
+  list.forEach((id) => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    sel.appendChild(opt);
+  });
+
+  if (saved) sel.value = saved;
+}
+
+function bindOwnerPersist() {
+  $("ownerId").addEventListener("change", () => {
+    localStorage.setItem(LS_OWNER_KEY, $("ownerId").value || "");
+  });
+}
+
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -415,5 +457,9 @@ function bindEvents() {
 
 setDefaults();
 bindEvents();
+
+renderOwnerSelect();
+bindOwnerPersist();
+
 
 
