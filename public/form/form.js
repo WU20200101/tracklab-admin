@@ -1,5 +1,7 @@
 /* /public/form/form.js */
 const EMPTY_TEXT = "请选择";
+const LS_OWNER_KEY = "tracklab_owner_id";
+const LS_ACCOUNT_KEY = "tracklab_account_id";
 
 function $(id){ return document.getElementById(id); }
 
@@ -113,7 +115,7 @@ async function loadOwners() {
   empty.textContent = EMPTY_TEXT;
   sel.appendChild(empty);
 
-  const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
+  const out = await httpjson(`${apiBase()}/owner/list`, { method: "GET" });
   const items = out.items || [];
 
   items.forEach((id) => {
@@ -450,5 +452,6 @@ function escapeHtml(s){
 }
 
 boot().catch(e=>setStatus("err", e.message));
+
 
 
