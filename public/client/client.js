@@ -504,10 +504,6 @@ function bindEvents() {
     handleAccountChanged().catch(showError);
   });
 
-  // 你要隐藏这个按钮就用 ?. 或直接删掉这一行
-  $("btnAccountRefresh")?.addEventListener("click", () => accountList().catch(showError));
-
-  $("btnPresetRefresh").addEventListener("click", () => presetRefreshList().catch(showError));
   // 你要隐藏 load/绑定按钮就用 ?. 或删掉
   $("btnPresetLoad")?.addEventListener("click", () => presetLoad().catch(showError));
   $("btnPresetBindAccount")?.addEventListener("click", () => presetBindAccount().catch(showError));
@@ -545,6 +541,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
