@@ -27,6 +27,7 @@
     .error { color:#b91c1c; font-size:13px; }
     .warn { color:#92400e; font-size:13px; }
     .info { color:#1f2937; font-size:13px; }
+    .readonly { background-color: #f3f4f6; color: #6b7280; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -40,7 +41,7 @@
       <div class="row">
         <div>
           <label>接口地址</label>
-          <input id="apiBase" />
+          <input id="apiBase" type="text" readonly class="input readonly"/>
         </div>
         <div>
           <label>发布平台</label>
@@ -207,6 +208,7 @@
   <script src="./client.js?v=20260204a"></script>
 </body>
 </html>
+
 
 
 
