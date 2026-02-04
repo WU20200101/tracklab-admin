@@ -58,15 +58,13 @@ function apiBase() {
   if (!v) throw new Error("API Base 不能为空");
   return v;
 }
+
 function getPackId() {
-  const v = $("packId").value.trim();
-  if (!v) throw new Error("Pack ID 不能为空");
-  return v;
+  return $("packId").value;
 }
+
 function getPackVersion() {
-  const v = $("packVer").value.trim();
-  if (!v) throw new Error("Pack Version 不能为空");
-  return v;
+  return $("packVersion").value;
 }
 
 function getOwnerIdStrict() {
@@ -661,6 +659,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
