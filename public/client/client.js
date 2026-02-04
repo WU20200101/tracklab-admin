@@ -411,8 +411,8 @@ function renderOutcomeUpsertReadable(resp, body) {
 
   const leadCreated = Number(body?.lead_created || 0);
   const paid = Number(body?.paid || 0);
-  const amountCents = Number(body?.amount_cents || 0);
-  const amount = (amountCents / 100).toFixed(2);
+  const amountYuan = Number(body?.amount_yuan || 0);
+  const amount = amountYuan.toFixed(2);
   const leadsCount = Number(body?.leads_count || 0);
   const note = (body?.note || "").trim();
 
@@ -427,7 +427,7 @@ function renderOutcomeUpsertReadable(resp, body) {
   lines.push(`- 新增客户：${leadCreated ? "是" : "否"}`);
   lines.push(`- 新增成交：${paid ? "是" : "否"}`);
 
-  if (paid) lines.push(`- 成交金额：${amount}`);
+  if (paid) lines.push(`- 成交金额：${amount}元`);
   if (leadsCount) lines.push(`- 新增客户数量：${leadsCount}`);
 
   if (note) {
@@ -531,7 +531,7 @@ async function outcomeUpsert() {
     window: $("ocWindow").value || "daily",
     lead_created: Number($("ocLeadCreated").value || 0),
     paid: Number($("ocPaid").value || 0),
-    amount_cents: Number($("ocAmountCents").value || 0),
+    amount_yuan: Number($("ocAmountYuan").value || 0),
     leads_count: Number($("ocLeadsCount").value || 0),
     note: ($("ocNote").value || "").trim() || null,
   };
@@ -641,6 +641,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
