@@ -1,197 +1,435 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TrackLab Admin-Lite (Form)</title>
-  <style>
-    :root{
-      --ink:#111827;
-      --muted:#6B7280;
-      --bg:#F6F7F9;
-      --card:#FFFFFF;
-      --line:#E5E7EB;
-      --brand:#0F172A;
-      --radius:14px;
+/* /public/form/form.js */
+
+function $(id){ return document.getElementById(id); }
+
+function setStatus(type, msg){
+  const el = $("status");
+  el.textContent = msg || "";
+  el.className = "status" + (type === "err" ? " err" : "");
+}
+
+async function httpjson(url, opt={}){
+  const res = await fetch(url, {
+    ...opt,
+    headers: {
+      "content-type":"application/json",
+      ...(opt.headers||{})
     }
-    body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:var(--bg); color:var(--ink); }
-    .wrap{ max-width: 1080px; margin: 24px auto; padding: 0 18px; }
-    .card{ background:var(--card); border:1px solid var(--line); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(0,0,0,.04); padding: 18px; margin-bottom: 18px; }
-    h1{ margin:0 0 6px; font-size: 22px; }
-    .sub{ color:var(--muted); font-size: 13px; }
-    .grid3{ display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; }
-    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    label{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-    input, select, textarea{
-      width:100%;
-      box-sizing:border-box;
-      padding: 10px 12px;
-      border:1px solid var(--line);
-      border-radius: 12px;
-      outline:none;
-      background:#fff;
-      color:var(--ink);
-      font-size:14px;
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { raw:text }; }
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+/** ------- 基础配置（你现在就是固定 xhs / v1.0.0 也可以） ------- **/
+function apiBase(){ return $("apiBase").value.trim(); }
+function getPackId(){ return $("packId").value; }
+function getPackVersion(){ return $("packVersion").value; }
+
+/** ------- stage 排序：S0 < S1 < ... ------- **/
+function stageRank(s){
+  if (!s) return -1;
+  const m = String(s).match(/^S(\d+)$/i);
+  return m ? Number(m[1]) : 999;
+}
+function minStage(stages){
+  if (!Array.isArray(stages) || stages.length===0) return null;
+  return stages.slice().sort((a,b)=>stageRank(a)-stageRank(b))[0];
+}
+
+/** ------- 全局状态 ------- **/
+let uiSchema = null;
+let manifest = null;
+
+let currentOwnerId = "";
+let currentAccountId = "";
+let currentPresetId = "";
+let currentPreset = null;     // /preset/get item
+let currentPayload = {};      // 解析后的 payload
+let currentStage = "S0";
+
+/** ------- 页面初始化 ------- **/
+async function boot(){
+  // API base：灰色只读
+  $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
+
+  // pack 下拉：最小实现（你现在只有 xhs / v1.0.0）
+  // 如果你未来要动态拉 manifest 列表，再扩展即可。
+  $("packId").innerHTML = `<option value="xhs">小红书</option>`;
+  $("packVersion").innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
+
+  bindEvents();
+
+  await loadPackSchema();
+  await loadOwners();
+  await handleOwnerChanged(); // 自动拉账号 + 自动拉 preset
+  setStatus("ok","就绪");
+}
+
+function bindEvents(){
+  $("packId").addEventListener("change", async ()=> {
+    await loadPackSchema().catch(e=>setStatus("err", e.message));
+    await handleOwnerChanged().catch(e=>setStatus("err", e.message));
+  });
+  $("packVersion").addEventListener("change", async ()=> {
+    await loadPackSchema().catch(e=>setStatus("err", e.message));
+    await handleOwnerChanged().catch(e=>setStatus("err", e.message));
+  });
+
+  $("ownerId").addEventListener("change", ()=> handleOwnerChanged().catch(e=>setStatus("err", e.message)));
+  $("accountSelect").addEventListener("change", ()=> handleAccountChanged().catch(e=>setStatus("err", e.message)));
+
+  $("onlyEnabled").addEventListener("change", ()=> presetRefreshList().catch(e=>setStatus("err", e.message)));
+  $("stageFilter").addEventListener("change", ()=> presetRefreshList().catch(e=>setStatus("err", e.message)));
+  $("presetSelect").addEventListener("change", ()=> presetLoadAndRender().catch(e=>setStatus("err", e.message)));
+
+  $("btnSave").addEventListener("click", ()=> saveCurrentStage().catch(e=>setStatus("err", e.message)));
+}
+
+/** ------- pack schema ------- **/
+async function loadPackSchema(){
+  setStatus("ok","加载 Schema…");
+  const out = await httpjson(`${apiBase()}/pack/${getPackId()}/${getPackVersion()}`);
+  manifest = out.manifest;
+  uiSchema = out.ui_schema;
+  $("schemaHint").textContent = `Schema 已加载：${uiSchema?.meta?.name || "ui_schema"} (${getPackId()} / ${getPackVersion()})`;
+  setStatus("ok","Schema 已加载");
+}
+
+/** ------- owners / accounts ------- **/
+async function loadOwners(){
+  // 你 worker 现在已经有 /owners/list（你截图能返回 items）
+  // 若未来没有，则这里可以改成固定列表。
+  setStatus("ok","加载用户列表…");
+  const out = await httpjson(`${apiBase()}/owners/list`);
+  const items = out?.items || [];
+  $("ownerId").innerHTML = items.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("") || `<option value="">(empty)</option>`;
+}
+
+async function handleOwnerChanged(){
+  currentOwnerId = $("ownerId").value || "";
+  currentAccountId = "";
+  currentPresetId = "";
+  currentPreset = null;
+  currentPayload = {};
+  clearPresetInfo();
+  clearForm();
+
+  if (!currentOwnerId){
+    $("accountSelect").innerHTML = `<option value="">(empty)</option>`;
+    $("presetSelect").innerHTML = `<option value="">(empty)</option>`;
+    return;
+  }
+
+  await refreshAccounts();
+  await handleAccountChanged();
+}
+
+async function refreshAccounts(){
+  setStatus("ok","加载账号…");
+  const out = await httpjson(`${apiBase()}/account/list?owner_id=${encodeURIComponent(currentOwnerId)}`);
+  const items = out?.items || [];
+  $("accountSelect").innerHTML = items.length
+    ? items.map(it=>`<option value="${escapeHtml(it.id)}">${escapeHtml(it.handle||it.id)} (${escapeHtml(it.updated_at||"")})</option>`).join("")
+    : `<option value="">(empty)</option>`;
+
+  currentAccountId = $("accountSelect").value || "";
+}
+
+async function handleAccountChanged(){
+  currentAccountId = $("accountSelect").value || "";
+  currentPresetId = "";
+  currentPreset = null;
+  currentPayload = {};
+  clearPresetInfo();
+  clearForm();
+
+  await presetRefreshList();
+  await presetLoadAndRender(); // 若只有一个 preset，会自动显示
+}
+
+/** ------- presets（按 account 过滤） ------- **/
+async function presetRefreshList(){
+  setStatus("ok","加载角色列表…");
+
+  const enabled = $("onlyEnabled").value; // "1" or ""
+  const stage = $("stageFilter").value;   // "S0"/...
+
+  // 关键：按 account_id 过滤（你 worker 需要支持 preset/list?account_id=...）
+  // 如果你已按 B 方案改过 worker，这里就能生效。
+  const qs = new URLSearchParams();
+  qs.set("pack_id", getPackId());
+  qs.set("pack_version", getPackVersion());
+  if (stage) qs.set("stage", stage);
+  if (enabled !== null) qs.set("enabled", enabled); // "" 表示不过滤 enabled（看全部）
+  if (currentAccountId) qs.set("account_id", currentAccountId);
+
+  const out = await httpjson(`${apiBase()}/preset/list?${qs.toString()}`);
+  const items = out?.items || [];
+
+  $("presetSelect").innerHTML = items.length
+    ? [`<option value="">请选择</option>`].concat(items.map(it=>{
+        const badge = Number(it.enabled)===1 ? "" : "（已淘汰）";
+        return `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)} [${escapeHtml(it.stage)}] ${badge} (${escapeHtml(it.updated_at||"")})</option>`;
+      })).join("")
+    : `<option value="">(empty)</option>`;
+
+  // 如果只有一个，自动选中
+  if (items.length === 1){
+    $("presetSelect").value = items[0].id;
+  }
+}
+
+async function presetLoadAndRender(){
+  const preset_id = $("presetSelect").value || "";
+  if (!preset_id){
+    clearPresetInfo();
+    clearForm();
+    return;
+  }
+
+  setStatus("ok","加载角色详情…");
+  const out = await httpjson(`${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}&pack_id=${encodeURIComponent(getPackId())}&pack_version=${encodeURIComponent(getPackVersion())}`);
+  currentPreset = out?.item || null;
+  if (!currentPreset) throw new Error("preset_not_found");
+
+  currentPresetId = currentPreset.id;
+  currentPayload = currentPreset.payload || {};
+  currentStage = currentPreset.stage || "S0";
+
+  // 基础信息展示
+  $("presetId").value = currentPreset.id || "";
+  $("presetStage").value = currentStage;
+  $("presetEnabled").value = String(currentPreset.enabled);
+
+  // 淘汰 preset：允许回看表单，但不允许保存
+  const disabled = Number(currentPreset.enabled) !== 1;
+  $("btnSave").disabled = disabled;
+  $("saveHint").textContent = disabled ? "该角色已淘汰（enabled=0），仅可回看，不可保存。" : "仅当前 stage 字段可编辑；保存后会刷新预览 prompt。";
+
+  // 渲染表单
+  renderForm();
+
+  // 初次也预览一次（便于确认）
+  await previewPromptToDebug(currentStage, currentPayload).catch(()=>{});
+  setStatus("ok","角色已加载");
+}
+
+/** ------- 表单渲染规则 ------- **/
+function renderForm(){
+  const c = $("formContainer");
+  c.innerHTML = "";
+  if (!uiSchema || !currentPreset) {
+    c.innerHTML = `<div class="sub">(empty)</div>`;
+    return;
+  }
+
+  const fields = uiSchema?.fields || [];
+  const curRank = stageRank(currentStage);
+
+  // 只展示 stage <= 当前 stage 的字段（按 min(editable_stages) 判断）
+  const visible = fields.filter(f=>{
+    const first = minStage(f.editable_stages);
+    if (!first) return false;
+    return stageRank(first) <= curRank;
+  });
+
+  if (visible.length === 0){
+    c.innerHTML = `<div class="sub">(empty)</div>`;
+    return;
+  }
+
+  // 按 stage 分组：S0/S1...
+  const groups = new Map();
+  for (const f of visible){
+    const first = minStage(f.editable_stages) || "S0";
+    if (!groups.has(first)) groups.set(first, []);
+    groups.get(first).push(f);
+  }
+
+  const stages = Array.from(groups.keys()).sort((a,b)=>stageRank(a)-stageRank(b));
+
+  for (const st of stages){
+    const box = document.createElement("div");
+    box.className = "fieldcard";
+
+    const head = document.createElement("div");
+    head.className = "fieldhead";
+    head.innerHTML = `<div><b>${escapeHtml(st)}</b></div><div class="pill">${stageRank(st)===curRank ? "当前阶段可编辑" : "历史阶段只读"}</div>`;
+    box.appendChild(head);
+
+    const list = groups.get(st) || [];
+    for (const f of list){
+      const key = f.key;
+      const label = f.label || key;
+      const type = f.type || "text";
+      const isEditable = Array.isArray(f.editable_stages) && f.editable_stages.includes(currentStage) && Number(currentPreset.enabled)===1;
+
+      const wrap = document.createElement("div");
+      wrap.style.marginBottom = "10px";
+
+      const lab = document.createElement("label");
+      lab.textContent = label + (Array.isArray(f.required_stages) && f.required_stages.includes(currentStage) ? " *" : "");
+      wrap.appendChild(lab);
+
+      const input = buildInputForField(f, currentPayload?.[key]);
+      input.id = `fld__${key}`;
+      input.disabled = !isEditable;
+
+      wrap.appendChild(input);
+
+      if (f.help){
+        const help = document.createElement("div");
+        help.className = "stagehint";
+        help.textContent = f.help;
+        wrap.appendChild(help);
+      }
+
+      box.appendChild(wrap);
     }
-    input[readonly]{
-      background:#F3F4F6;
-      color:#374151;
-      cursor:not-allowed;
+
+    c.appendChild(box);
+  }
+}
+
+function buildInputForField(field, value){
+  const type = field.type || "text";
+
+  // 简化：你 pack 里目前以 textarea/text/enum/bool 为主，先覆盖这四类
+  if (type === "textarea"){
+    const el = document.createElement("textarea");
+    el.value = value == null ? "" : String(value);
+    return el;
+  }
+
+  if (type === "enum"){
+    const el = document.createElement("select");
+    const opts = field.options || [];
+    el.innerHTML = [`<option value="">请选择</option>`].concat(opts.map(o=>`<option value="${escapeHtml(o.value)}">${escapeHtml(o.label||o.value)}</option>`)).join("");
+    el.value = value == null ? "" : String(value);
+    return el;
+  }
+
+  if (type === "bool"){
+    const el = document.createElement("select");
+    el.innerHTML = `
+      <option value="">请选择</option>
+      <option value="true">是</option>
+      <option value="false">否</option>
+    `;
+    if (value === true) el.value = "true";
+    else if (value === false) el.value = "false";
+    else el.value = "";
+    return el;
+  }
+
+  // 默认 text
+  const el = document.createElement("input");
+  el.type = "text";
+  el.value = value == null ? "" : String(value);
+  return el;
+}
+
+/** ------- 保存逻辑：只写当前 stage 可编辑字段 ------- **/
+async function saveCurrentStage(){
+  if (!currentPreset?.id) throw new Error("未加载 preset");
+  if (Number(currentPreset.enabled) !== 1) throw new Error("该 preset 已淘汰（enabled=0），不可保存");
+
+  setStatus("ok","保存中…");
+
+  const fields = uiSchema?.fields || [];
+  const editableFields = fields.filter(f => Array.isArray(f.editable_stages) && f.editable_stages.includes(currentStage));
+  const merged = { ...(currentPayload || {}) };
+
+  for (const f of editableFields){
+    const key = f.key;
+    const el = $(`fld__${key}`);
+    if (!el) continue;
+
+    let v = el.value;
+
+    // bool：转 true/false/null
+    if ((f.type||"") === "bool"){
+      if (v === "true") v = true;
+      else if (v === "false") v = false;
+      else v = null;
     }
-    textarea{ min-height: 120px; resize: vertical; }
-    .row{ display:flex; align-items:center; gap:10px; }
-    .btn{
-      border: 1px solid var(--line);
-      background: #fff;
-      border-radius: 12px;
-      padding: 10px 14px;
-      cursor: pointer;
-      font-weight: 600;
+
+    // 空字符串 -> null（避免污染 payload）
+    if (typeof v === "string"){
+      v = v.trim();
+      if (v === "") v = null;
     }
-    .btn.primary{
-      background: var(--brand);
-      color: #fff;
-      border-color: var(--brand);
+
+    // required：只在当前 stage 校验
+    if (Array.isArray(f.required_stages) && f.required_stages.includes(currentStage)){
+      if (v == null || v === ""){
+        throw new Error(`缺少必填：${f.label || f.key}`);
+      }
     }
-    .sep{ height:1px; background: var(--line); margin: 14px 0; }
-    .titlebar{ display:flex; align-items:baseline; justify-content:space-between; gap: 12px; }
-    .status{ font-size: 13px; color: #059669; }
-    .status.err{ color:#DC2626; }
-    .blocktitle{ font-weight: 800; font-size: 18px; margin:0 0 10px; }
-    .stagehint{ color: var(--muted); font-size: 12px; margin-top: 6px; }
-    .fieldcard{ border:1px dashed var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
-    .fieldhead{ display:flex; justify-content:space-between; gap: 10px; margin-bottom: 8px; }
-    .pill{ font-size:12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-    pre{
-      margin:0;
-      padding: 14px;
-      border-radius: 14px;
-      background: #0B1220;
-      color: #E5E7EB;
-      overflow:auto;
-      font-size: 12px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-  </style>
-</head>
-<body>
-  <div class="wrap">
 
-    <!-- ① 标题栏（对齐工作台） -->
-    <div class="card">
-      <div class="titlebar">
-        <div>
-          <h1>TrackLab Admin-Lite（Form）</h1>
-          <div class="sub">只做 preset 当前 stage 的表单填写/更新；不含 preview/generate/feedback/jobs/outcomes。</div>
-        </div>
-        <div id="status" class="status">就绪</div>
-      </div>
-    </div>
+    merged[key] = v;
+  }
 
-    <!-- ② 接口/平台/版本（对齐工作台） -->
-    <div class="card">
-      <div class="grid3">
-        <div>
-          <label>接口地址</label>
-          <input id="apiBase" type="text" readonly />
-        </div>
-        <div>
-          <label>发布平台</label>
-          <select id="packId"></select>
-        </div>
-        <div>
-          <label>版本号</label>
-          <select id="packVersion"></select>
-        </div>
-      </div>
-      <div class="stagehint" id="schemaHint">Schema 未加载</div>
-    </div>
+  // 写回 preset（payload 原样覆盖）
+  await httpjson(`${apiBase()}/preset/update/${encodeURIComponent(currentPreset.id)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+      payload: merged,
+      stage: currentStage, // 不改 stage，只回写同值
+    }),
+  });
 
-    <!-- ③ 选择账号（对齐工作台） -->
-    <div class="card">
-      <div class="blocktitle">一、选择账号</div>
-      <div class="grid2">
-        <div>
-          <label>用户名</label>
-          <select id="ownerId"></select>
-        </div>
-        <div>
-          <label>账号</label>
-          <select id="accountSelect"></select>
-        </div>
-      </div>
-    </div>
+  currentPayload = merged;
 
-    <!-- ④ 选择角色（对齐工作台） -->
-    <div class="card">
-      <div class="blocktitle">二、选择角色</div>
-      <div class="grid3">
-        <div>
-          <label>选择角色范围</label>
-          <select id="onlyEnabled">
-            <option value="1" selected>仅有效角色</option>
-            <option value="">全部角色（含淘汰）</option>
-          </select>
-          <div class="stagehint">淘汰角色仅用于回看，不参与生成/提交。</div>
-        </div>
-        <div>
-          <label>按账号级别查看</label>
-          <select id="stageFilter">
-            <option value="">全部级别</option>
-            <option value="S0">S0</option>
-            <option value="S1">S1</option>
-            <option value="S2">S2</option>
-            <option value="S3">S3</option>
-          </select>
-        </div>
-        <div>
-          <label>角色</label>
-          <select id="presetSelect"></select>
-        </div>
-      </div>
+  // 保存后预览 prompt
+  await previewPromptToDebug(currentStage, currentPayload);
 
-      <div class="sep"></div>
+  setStatus("ok","已保存");
+}
 
-      <div class="grid3">
-        <div>
-          <label>当前 preset_id（只读）</label>
-          <input id="presetId" type="text" readonly />
-        </div>
-        <div>
-          <label>当前 stage（只读）</label>
-          <input id="presetStage" type="text" readonly />
-        </div>
-        <div>
-          <label>enabled（只读）</label>
-          <input id="presetEnabled" type="text" readonly />
-        </div>
-      </div>
-    </div>
+async function previewPromptToDebug(stage, payload){
+  const out = await httpjson(`${apiBase()}/preview`, {
+    method: "POST",
+    body: JSON.stringify({
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+      stage,
+      payload,
+    }),
+  });
+  $("debugPrompt").textContent = out?.prompt_text || "(empty)";
+}
 
-    <!-- ⑤ 表单区 -->
-    <div class="card">
-      <div class="blocktitle">三、表单（自动回填；仅当前 stage 可编辑）</div>
-      <div class="sub">展示：stage ≤ 当前 stage 的字段；隐藏：未来字段。保存按钮在当前 stage 表单底部。</div>
-      <div class="sep"></div>
+/** ------- 清理 ------- **/
+function clearPresetInfo(){
+  $("presetId").value = "";
+  $("presetStage").value = "";
+  $("presetEnabled").value = "";
+  $("btnSave").disabled = true;
+  $("saveHint").textContent = "请选择账号与角色后编辑。";
+  $("debugPrompt").textContent = "(empty)";
+}
 
-      <div id="formContainer"></div>
+function clearForm(){
+  $("formContainer").innerHTML = `<div class="sub">(empty)</div>`;
+}
 
-      <div class="row" style="margin-top:12px;">
-        <button id="btnSave" class="btn primary" disabled>保存当前阶段表单</button>
-        <span class="sub" id="saveHint">请选择账号与角色后编辑。</span>
-      </div>
-    </div>
+/** ------- util ------- **/
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
 
-    <!-- ⑥ 调试：预览更新后的 prompt -->
-    <div class="card">
-      <div class="blocktitle">调试（预览更新后的 prompt）</div>
-      <pre id="debugPrompt">(empty)</pre>
-    </div>
-
-  </div>
-
-  <script src="./form.js?v=20260204a"></script>
-</body>
-</html>
+boot().catch(e=>setStatus("err", e.message));
