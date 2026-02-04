@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TrackLab Client</title>
+  <style>
+    :root { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial; }
+    body { margin:0; background:#f6f7f9; color:#111827; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius: 12px; padding:14px; margin-bottom:12px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .row > div { flex: 1 1 220px; }
+    label { display:block; font-size:12px; color:#6b7280; margin-bottom:6px; }
+    input, select, textarea, button {
+      width:100%; box-sizing:border-box;
+      border:1px solid #e5e7eb; border-radius:10px;
+      padding:10px; font-size:14px; background:#fff;
+    }
+    textarea { min-height: 120px; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace; }
+    button { cursor:pointer; }
+    button.primary { background:#111827; color:#fff; border-color:#111827; }
+    .muted { color:#6b7280; font-size:12px; }
+    .group { border-top: 1px dashed #e5e7eb; padding-top:12px; margin-top:12px; }
+    pre { white-space:pre-wrap; word-break:break-word; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:12px; overflow:auto; }
+    .ok { color:#065f46; font-size:13px; }
+    .error { color:#b91c1c; font-size:13px; }
+    .warn { color:#92400e; font-size:13px; }
+    .info { color:#1f2937; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2 style="margin:0 0 6px 0;">TrackLab Client</h2>
+      <div class="muted">使用页：preview / generate / feedback / outcome / stats。Preset 结构不在此修改。</div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>API Base</label>
+          <input id="apiBase" />
+        </div>
+        <div>
+          <label>Pack ID</label>
+          <input id="packId" value="xhs" />
+        </div>
+        <div>
+          <label>Pack Version</label>
+          <input id="packVer" value="v1.0.0" />
+        </div>
+      </div>
+      <div id="status" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">1) 选择 Account</h3>
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Owner ID</label>
+          <input id="ownerId" placeholder="例如：wuxiaofei / wife / ops1" />
+        </div>
+        <div>
+          <label>Accounts（当前 owner）</label>
+          <select id="accountSelect">
+            <option value="">(empty)</option>
+          </select>
+        </div>
+        <div>
+          <label>Account Handle（可选创建）</label>
+          <input id="accountHandle" placeholder="例如：xhs_宝妈01" />
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnAccountRefresh" style="width:auto;padding:10px 14px;">刷新 Accounts</button>
+        <button id="btnAccountCreate" class="primary" style="width:auto;padding:10px 14px;">创建 Account</button>
+      </div>
+      <div class="group">
+        <label>Account 输出（只读）</label>
+        <pre id="accountOut">(empty)</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">2) 选择 Preset</h3>
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>仅看 enabled=1</label>
+          <select id="enabledOnly">
+            <option value="1">是</option>
+            <option value="">否（全部）</option>
+          </select>
+        </div>
+        <div>
+          <label>按 stage 过滤（可选）</label>
+          <select id="stageFilter">
+            <option value="">(all)</option>
+            <option value="S0">S0</option>
+            <option value="S1">S1</option>
+            <option value="S2">S2</option>
+            <option value="S3">S3</option>
+          </select>
+        </div>
+        <div style="flex: 2 1 420px;">
+          <label>Presets</label>
+          <select id="presetSelect">
+            <option value="">(empty)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnPresetRefresh" style="width:auto;padding:10px 14px;">刷新 Preset 列表</button>
+        <button id="btnPresetLoad" class="primary" style="width:auto;padding:10px 14px;">加载 preset 状态</button>
+        <button id="btnPresetBindAccount" class="primary" style="width:auto;padding:10px 14px;">绑定：Preset → Account</button>
+      </div>
+
+      <div class="group">
+        <label>Preset 状态（只读）</label>
+        <pre id="presetOut">(empty)</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">3) Preview / Generate</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnPreview" style="width:auto;padding:10px 14px;">Preview Prompt</button>
+        <button id="btnGenerate" class="primary" style="width:auto;padding:10px 14px;">Generate 内容</button>
+      </div>
+
+      <div class="group">
+        <label>Preview Prompt（只读）</label>
+        <pre id="previewOut">(empty)</pre>
+      </div>
+
+      <div class="group">
+        <label>Generate 输出（可读格式）</label>
+        <pre id="genText">(empty)</pre>
+      </div>
+
+      <div class="group">
+        <label>Generate 原始 JSON（只读，调试用）</label>
+        <pre id="genRaw">(empty)</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">4) Feedback（累计口径）</h3>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Date (YYYY-MM-DD)</label>
+          <input id="fbDate" placeholder="2026-02-03" />
+        </div>
+        <div><label>Posts（累计）</label><input id="fbPosts" type="number" min="0" step="1" value="0" /></div>
+        <div><label>Views（累计）</label><input id="fbViews" type="number" min="0" step="1" value="0" /></div>
+        <div><label>Likes（累计）</label><input id="fbLikes" type="number" min="0" step="1" value="0" /></div>
+        <div><label>Collects（累计）</label><input id="fbCollects" type="number" min="0" step="1" value="0" /></div>
+        <div><label>Comments（累计）</label><input id="fbComments" type="number" min="0" step="1" value="0" /></div>
+        <div><label>DM Inbound（累计）</label><input id="fbDmInbound" type="number" min="0" step="1" value="0" /></div>
+      </div>
+
+      <div class="group">
+        <label>Note（可选）</label>
+        <input id="fbNote" placeholder="可选备注" />
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnFeedbackUpsert" class="primary" style="width:auto;padding:10px 14px;">提交反馈并评估</button>
+        <button id="btnStatsPreset" style="width:auto;padding:10px 14px;">刷新 Stats（preset）</button>
+      </div>
+
+      <div class="group">
+        <label>Evaluation（只读）</label>
+        <pre id="evalOut">(empty)</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">5) Outcomes（交易事实回流）</h3>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Date (YYYY-MM-DD)</label>
+          <input id="ocDate" placeholder="2026-02-03" />
+        </div>
+        <div>
+          <label>Window</label>
+          <select id="ocWindow">
+            <option value="daily">daily</option>
+            <option value="weekly">weekly</option>
+          </select>
+        </div>
+        <div>
+          <label>Lead Created (0/1)</label>
+          <select id="ocLeadCreated"><option value="0">0</option><option value="1">1</option></select>
+        </div>
+        <div>
+          <label>Paid (0/1)</label>
+          <select id="ocPaid"><option value="0">0</option><option value="1">1</option></select>
+        </div>
+        <div>
+          <label>Amount (cents)</label>
+          <input id="ocAmountCents" type="number" min="0" step="1" value="0" />
+        </div>
+        <div>
+          <label>Leads Count</label>
+          <input id="ocLeadsCount" type="number" min="0" step="1" value="0" />
+        </div>
+      </div>
+
+      <div class="group">
+        <label>Note（可选）</label>
+        <input id="ocNote" placeholder="例如：微信加了2个；其中1个已付" />
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnOutcomeUpsert" class="primary" style="width:auto;padding:10px 14px;">提交 Outcome</button>
+      </div>
+
+      <div class="group">
+        <label>Outcome 返回（只读）</label>
+        <pre id="outcomeOut">(empty)</pre>
+      </div>
+
+      <div class="group">
+        <label>Stats（只读）</label>
+        <pre id="statsOut">(empty)</pre>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="./client.js?v=20260204a"></script>
+</body>
+</html>

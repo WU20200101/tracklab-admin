@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TrackLab Form</title>
+  <style>
+    :root { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial; }
+    body { margin:0; background:#f6f7f9; color:#111827; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius: 12px; padding:14px; margin-bottom:12px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .row > div { flex: 1 1 220px; }
+    label { display:block; font-size:12px; color:#6b7280; margin-bottom:6px; }
+    input, select, textarea, button {
+      width:100%; box-sizing:border-box;
+      border:1px solid #e5e7eb; border-radius:10px;
+      padding:10px; font-size:14px; background:#fff;
+    }
+    button { cursor:pointer; }
+    button.primary { background:#111827; color:#fff; border-color:#111827; }
+    .muted { color:#6b7280; font-size:12px; }
+    .group { border-top: 1px dashed #e5e7eb; padding-top:12px; margin-top:12px; }
+    .field { margin-bottom:10px; }
+    .checks { display:flex; gap:10px; flex-wrap:wrap; }
+    .check { display:flex; align-items:center; gap:6px; border:1px solid #e5e7eb; border-radius:999px; padding:6px 10px; }
+    .check input { width:auto; }
+    .ok { color:#065f46; font-size:13px; }
+    .error { color:#b91c1c; font-size:13px; }
+    .warn { color:#92400e; font-size:13px; }
+    .info { color:#1f2937; font-size:13px; }
+    pre { white-space:pre-wrap; word-break:break-word; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:12px; overflow:auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2 style="margin:0 0 6px 0;">TrackLab Admin-Lite（Form）</h2>
+      <div class="muted">只做 preset 当前 stage 的字段补填/更新；不含 preview/generate/feedback/jobs/outcomes。</div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>API Base</label>
+          <input id="apiBase" />
+        </div>
+        <div>
+          <label>Pack ID</label>
+          <input id="packId" value="xhs" />
+        </div>
+        <div>
+          <label>Pack Version</label>
+          <input id="packVer" value="v1.0.0" />
+        </div>
+        <div>
+          <label>Stage（只读：来自 preset 事实）</label>
+          <input id="stageView" disabled value="(not loaded)" />
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnLoad" class="primary" style="width:auto;padding:10px 14px;">加载 Schema</button>
+        <button id="btnRefreshPresets" style="width:auto;padding:10px 14px;">刷新 Preset 列表</button>
+      </div>
+
+      <div id="status" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">选择 Preset</h3>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>仅看 enabled=1</label>
+          <select id="enabledOnly">
+            <option value="1">是</option>
+            <option value="">否（全部）</option>
+          </select>
+        </div>
+        <div>
+          <label>按 stage 过滤（可选）</label>
+          <select id="stageFilter">
+            <option value="">(all)</option>
+            <option value="S0">S0</option>
+            <option value="S1">S1</option>
+            <option value="S2">S2</option>
+            <option value="S3">S3</option>
+          </select>
+        </div>
+        <div style="flex: 2 1 420px;">
+          <label>Presets</label>
+          <select id="presetSelect">
+            <option value="">(empty)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnLoadPreset" class="primary" style="width:auto;padding:10px 14px;">加载 preset → 回填表单</button>
+        <button id="btnSavePreset" class="primary" style="width:auto;padding:10px 14px;">保存（覆盖更新 preset.payload）</button>
+      </div>
+
+      <div class="group">
+        <label>当前 preset_id（只读）</label>
+        <input id="presetId" disabled />
+        <div class="muted">保存时只更新 payload（以及可选同步 stage=当前 stage 事实）。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">表单（只渲染当前 stage 可填字段）</h3>
+      <div id="formHost" class="muted">先点击「加载 Schema」</div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">调试（只读）</h3>
+      <pre id="debugOut">(empty)</pre>
+    </div>
+
+  </div>
+
+  <script src="./form.js?v=20260204a"></script>
+</body>
+</html>
