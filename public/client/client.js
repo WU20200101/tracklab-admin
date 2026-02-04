@@ -505,8 +505,7 @@ function bindEvents() {
   });
 
   // 你要隐藏这个按钮就用 ?. 或直接删掉这一行
-  $("btnAccountRefresh").addEventListener("click", () => accountList().catch(showError));
-  $("btnAccountCreate")?.addEventListener("click", () => accountCreate().catch(showError));
+  $("btnAccountRefresh")?.addEventListener("click", () => accountList().catch(showError));
 
   $("btnPresetRefresh").addEventListener("click", () => presetRefreshList().catch(showError));
   // 你要隐藏 load/绑定按钮就用 ?. 或删掉
@@ -546,5 +545,6 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
