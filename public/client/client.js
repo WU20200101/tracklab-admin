@@ -464,6 +464,7 @@ async function feedbackUpsert() {
   });
 
   setPre("evalOut", out?.evaluation || out);
+  setPre("evalOut", renderEvaluationReadable(out?.evaluation));
 
   // advance 后刷新 preset 事实
   try {
@@ -601,6 +602,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
