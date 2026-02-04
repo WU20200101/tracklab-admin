@@ -92,6 +92,14 @@ function ensurePresetEnabledForOps() {
   }
 }
 
+function applyEnabledUi(enabled) {
+  const disabled = Number(enabled) !== 1;
+  $("btnPreview") && ($("btnPreview").disabled = disabled);
+  $("btnGenerate") && ($("btnGenerate").disabled = disabled);
+  $("btnFeedbackUpsert") && ($("btnFeedbackUpsert").disabled = disabled);
+  $("btnOutcomeUpsert") && ($("btnOutcomeUpsert").disabled = disabled);
+}
+
 function setPre(id, obj) {
   const el = document.getElementById(id);
   if (!el) return; // 关键：删掉 UI 后不报错
@@ -121,7 +129,6 @@ function clearPresetsUI() {
   sel.appendChild(empty);
 
   currentPreset = null;
-  setPre("presetOut", "(empty)");
 }
 
 function clearAccountsUI() {
@@ -131,8 +138,6 @@ function clearAccountsUI() {
   empty.value = "";
   empty.textContent = "(empty)";
   sel.appendChild(empty);
-
-  setPre("accountOut", "(empty)");
 }
 
 async function loadOwners() {
@@ -143,7 +148,7 @@ async function loadOwners() {
   const empty = document.createElement("option");
   empty.value = "";
   empty.textContent = "请选择";
-  sel.appendChild(empty);
+  sel.appendChild = "请选择";
 
   const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
   const items = out.items || [];
@@ -283,7 +288,6 @@ async function presetLoad() {
 }
 
 async function presetBindAccount() {
-  const preset_id = getPresetIdStrict();
   const account_id = getAccountIdStrict();
 
   const body = {
@@ -354,19 +358,10 @@ function formatClientText(outputObj) {
 
 async function generateContent() {
   const preset_id = getPresetIdStrict();
-  const preset_id = getPresetIdStrict();
+
+  // 确保 currentPreset 对应当前选择的 preset，再做 enabled gate
   if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
   ensurePresetEnabledForOps();
-
-  function applyEnabledUi(enabled) {
-  const disabled = Number(enabled) !== 1;
-
-  // 这些按钮可能存在/不存在（你在精简 UI），用 ?. 防空
-  $("btnPreview") && ($("btnPreview").disabled = disabled);
-  $("btnGenerate") && ($("btnGenerate").disabled = disabled);
-  $("btnFeedbackUpsert") && ($("btnFeedbackUpsert").disabled = disabled);
-  $("btnOutcomeUpsert") && ($("btnOutcomeUpsert").disabled = disabled);
-}
 
   setStatus("info", "Generate 中…");
   const out = await httpJson(`${apiBase()}/generate`, {
@@ -378,12 +373,13 @@ async function generateContent() {
     }),
   });
 
-  setPre("genRaw", out);
+  setPre("genRaw", out); // 你若已删 genRaw UI，这里不会报错（setPre 会 no-op）
   const outputObj = out?.output || {};
   setPre("genText", formatClientText(outputObj));
 
   setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
 }
+
 
 function readNonNegInt(id) {
   const v = ($(id)?.value ?? "").toString().trim();
@@ -563,6 +559,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
