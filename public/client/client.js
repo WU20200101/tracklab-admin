@@ -401,6 +401,42 @@ function renderEvaluationReadable(evaluation) {
   return lines.join("\n");
 }
 
+function renderOutcomeUpsertReadable(resp, body) {
+  if (!resp) return "（无返回）";
+
+  const ok = resp.ok === true;
+
+  const windowLabelMap = { daily: "每日", weekly: "每周", monthly: "每月" };
+  const windowLabel = windowLabelMap[body?.window] || (body?.window || "");
+
+  const leadCreated = Number(body?.lead_created || 0);
+  const paid = Number(body?.paid || 0);
+  const amountCents = Number(body?.amount_cents || 0);
+  const amount = (amountCents / 100).toFixed(2);
+  const leadsCount = Number(body?.leads_count || 0);
+  const note = (body?.note || "").trim();
+
+  const lines = [];
+  lines.push("【交易记录提交】");
+  lines.push(ok ? "✅ 已保存" : "⚠️ 未确认保存");
+  lines.push("");
+
+  if (body?.date) lines.push(`- 日期：${body.date}`);
+  if (windowLabel) lines.push(`- 统计周期：${windowLabel}`);
+
+  lines.push(`- 新增客户：${leadCreated ? "是" : "否"}`);
+  lines.push(`- 新增成交：${paid ? "是" : "否"}`);
+
+  if (paid) lines.push(`- 成交金额：${amount}`);
+  if (leadsCount) lines.push(`- 新增客户数量：${leadsCount}`);
+
+  if (note) {
+    lines.push("");
+    lines.push(`备注：${note}`);
+  }
+
+  return lines.join("\n");
+}
 
 async function generateContent() {
   const preset_id = getPresetIdStrict();
@@ -482,6 +518,9 @@ async function outcomeUpsert() {
   const date = ($("ocDate").value || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Outcome date 格式必须为 YYYY-MM-DD");
 
+  if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+  ensurePresetEnabledForOps();
+
   const body = {
     pack_id: getPackId(),
     pack_version: getPackVersion(),
@@ -503,7 +542,7 @@ async function outcomeUpsert() {
     body: JSON.stringify(body),
   });
 
-  setPre("outcomeOut", out);
+  setPre("outcomeOut", renderOutcomeUpsertReadable(out, body));
   setStatus("ok", "Outcome 已写入");
 }
 
@@ -602,6 +641,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
