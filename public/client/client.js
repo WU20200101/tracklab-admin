@@ -149,12 +149,19 @@ async function presetRefreshList() {
   const stage = $("stageFilter").value;
   const enabled = $("enabledOnly").value;
 
+  // ✅ 取当前选择的 account_id（没选就空）
+  const account_id = ($("accountSelect").value || "").trim();
+
   let url =
     `${apiBase()}/preset/list?pack_id=${encodeURIComponent(pack_id)}` +
     `&pack_version=${encodeURIComponent(pack_version)}`;
 
   if (stage) url += `&stage=${encodeURIComponent(stage)}`;
   if (enabled !== "") url += `&enabled=${encodeURIComponent(enabled)}`;
+  
+   // ✅ 新增：按 account 过滤
+  if (account_id) url += `&account_id=${encodeURIComponent(account_id)}`;
+}
 
   setStatus("info", "刷新 presets 中…");
   const out = await httpJson(url, { method: "GET" });
@@ -400,7 +407,13 @@ function bindEvents() {
   $("btnFeedbackUpsert").addEventListener("click", () => feedbackUpsert().catch(showError));
   $("btnOutcomeUpsert").addEventListener("click", () => outcomeUpsert().catch(showError));
   $("btnStatsPreset").addEventListener("click", () => statsPreset().catch(showError));
+
+  $("accountSelect").addEventListener("change", () => {
+  presetRefreshList().catch(showError);
+});
+
 }
 
 setDefaults();
 bindEvents();
+
