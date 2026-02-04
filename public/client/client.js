@@ -357,6 +357,51 @@ function formatClientText(outputObj) {
   return `标题：${title}\n副标题：${subtitle}\n--------\n正文：\n${content}\n--------\n标签：${tags}`;
 }
 
+function renderEvaluationReadable(evaluation) {
+  if (!evaluation) return "（暂无评估结果）";
+
+  const actionMap = {
+    advance: "✅ 达到升级条件（将进入下一阶段）",
+    observe: "⏳ 继续观察（暂不升级）",
+    disable: "⛔ 判定为淘汰（不再参与后续生成）",
+    none: "ℹ️ 数据不足，尚未触发评估动作"
+  };
+
+  const lines = [];
+
+  // 1) 结论行
+  lines.push(`【评估结论】`);
+  lines.push(actionMap[evaluation.action] || evaluation.action);
+  lines.push("");
+
+  // 2) 数据摘要
+  if (evaluation.metrics) {
+    const m = evaluation.metrics;
+    lines.push("【数据概览】");
+    lines.push(`- 已运行天数：${m.age_days} 天`);
+    lines.push(`- 发布内容数：${m.posts}`);
+    lines.push(`- 浏览量：${m.views}`);
+    lines.push(`- 点赞量：${m.likes}`);
+    lines.push(`- 收藏量：${m.collects}`);
+    lines.push(`- 评论量：${m.comments}`);
+    lines.push(`- 私信量：${m.dm_inbound}`);
+    lines.push(`- 总互动数：${m.interactions}`);
+    lines.push("");
+  }
+
+  // 3) 观察窗口
+  if (evaluation.window) {
+    const w = evaluation.window;
+    lines.push("【评估周期】");
+    lines.push(`- 周期总数：${w.max_windows} 个`);
+    lines.push(`- 每个评估周期：${w.window_days} 天`);
+    lines.push(`- 当前周期：第 ${w.window_index} 个`);
+  }
+
+  return lines.join("\n");
+}
+
+
 async function generateContent() {
   const preset_id = getPresetIdStrict();
 
@@ -556,6 +601,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
