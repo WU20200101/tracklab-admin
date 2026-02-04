@@ -128,7 +128,7 @@
       <div class="row" style="margin-top:12px;">
         <div>
           <label>日期 (默认当天)</label>
-          <input id="fbDate" placeholder="2026-02-03" />
+          <input id="fbDate" type="date" />
         </div>
         <div><label>已发布内容篇数（累计）</label><input id="fbPosts" type="number" min="0" step="1" value="0" /></div>
         <div><label>查看量（累计）</label><input id="fbViews" type="number" min="0" step="1" value="0" /></div>
@@ -159,7 +159,7 @@
       <div class="row" style="margin-top:12px;">
         <div>
           <label>日期（默认当天）</label>
-          <input id="ocDate" placeholder="2026-02-03" />
+          <input id="ocDate" type="date" />
         </div>
         <div>
           <label>统计周期</label>
@@ -200,10 +200,6 @@
         <pre id="outcomeOut">交易记录将在此处展示</pre>
       </div>
 
-      <div class="group">
-        <label>stats（只读）</label>
-        <pre id="statsOut">（empty）</pre>
-      </div>
     </div>
 
   </div>
@@ -211,6 +207,7 @@
   <script src="./client.js?v=20260204a"></script>
 </body>
 </html>
+
 
 
 
