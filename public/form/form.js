@@ -102,13 +102,29 @@ async function loadPackSchema(){
 }
 
 /** ------- owners / accounts ------- **/
-async function loadOwners(){
-  // 你 worker 现在已经有 /owners/list（你截图能返回 items）
-  // 若未来没有，则这里可以改成固定列表。
-  setStatus("ok","加载用户列表…");
-  const out = await httpjson(`${apiBase()}/owners/list`);
-  const items = out?.items || [];
-  $("ownerId").innerHTML = items.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("") || `<option value="">(empty)</option>`;
+async function loadOwners() {
+  // Owner 下拉来自 D1（/owner/list）
+  const sel = $("ownerId");
+  sel.innerHTML = "";
+
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = EMPTY_TEXT;
+  sel.appendChild(empty);
+
+  const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
+  const items = out.items || [];
+
+  items.forEach((id) => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    sel.appendChild(opt);
+  });
+
+  // 还原上次选择（如果仍存在）
+  const saved = localStorage.getItem(LS_OWNER_KEY) || "";
+  if (saved && items.includes(saved)) sel.value = saved;
 }
 
 async function handleOwnerChanged(){
@@ -433,3 +449,4 @@ function escapeHtml(s){
 }
 
 boot().catch(e=>setStatus("err", e.message));
+
