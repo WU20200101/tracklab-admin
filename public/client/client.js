@@ -86,9 +86,12 @@ function getPresetIdStrict() {
 }
 
 function setPre(id, obj) {
-  $(id).textContent =
+  const el = document.getElementById(id);
+  if (!el) return; // 关键：删掉 UI 后不报错
+  el.textContent =
     obj == null ? "(empty)" : typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
 }
+
 
 function todayYMD() {
   const d = new Date();
@@ -501,12 +504,14 @@ function bindEvents() {
     handleAccountChanged().catch(showError);
   });
 
-  $("btnAccountRefresh").addEventListener("click", () => accountList().catch(showError));
+  // 你要隐藏这个按钮就用 ?. 或直接删掉这一行
+  $("btnAccountRefresh")?.addEventListener("click", () => accountList().catch(showError));
   $("btnAccountCreate").addEventListener("click", () => accountCreate().catch(showError));
 
   $("btnPresetRefresh").addEventListener("click", () => presetRefreshList().catch(showError));
-  $("btnPresetLoad").addEventListener("click", () => presetLoad().catch(showError));
-  $("btnPresetBindAccount").addEventListener("click", () => presetBindAccount().catch(showError));
+  // 你要隐藏 load/绑定按钮就用 ?. 或删掉
+  $("btnPresetLoad")?.addEventListener("click", () => presetLoad().catch(showError));
+  $("btnPresetBindAccount")?.addEventListener("click", () => presetBindAccount().catch(showError));
 
   $("btnPreview").addEventListener("click", () => previewPrompt().catch(showError));
   $("btnGenerate").addEventListener("click", () => generateContent().catch(showError));
@@ -514,7 +519,13 @@ function bindEvents() {
   $("btnFeedbackUpsert").addEventListener("click", () => feedbackUpsert().catch(showError));
   $("btnOutcomeUpsert").addEventListener("click", () => outcomeUpsert().catch(showError));
   $("btnStatsPreset").addEventListener("click", () => statsPreset().catch(showError));
+
+  // 保留：选 preset 自动加载
+  $("presetSelect").addEventListener("change", () => {
+    presetLoad().catch(showError);
+  });
 }
+
 
 /** 启动：先加载 owners，再按 localStorage 恢复联动 */
 async function boot() {
@@ -535,3 +546,4 @@ async function boot() {
 }
 
 boot().catch(showError);
+
