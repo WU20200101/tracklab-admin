@@ -12,22 +12,22 @@
       --card:#FFFFFF;
       --line:#E5E7EB;
       --brand:#1A73E8;
-      --radius:14px;
+      --radius:12px;
     }
     body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:var(--bg); color:var(--ink); }
-    .wrap{ max-width: 980px; margin: 24px auto; padding: 0 16px; }
-    .card{ background:var(--card); border:1px solid var(--line); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(0,0,0,.04); padding: 18px; margin-bottom: 18px; }
+    .wrap{ max-width: 980px; margin: 0px auto; padding: 16px; }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
     h1{ margin:0 0 6px; font-size: 22px; }
-    .sub{ color:var(--muted); font-size: 13px; }
+    .sub{ color:var(--muted); font-size: 12px; }
     .grid3{ display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; }
     .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     label{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
     input, select, textarea{
       width:100%;
       box-sizing:border-box;
-      padding: 10px 12px;
+      padding: 10px;
       border:1px solid var(--line);
-      border-radius: 12px;
+      border-radius: 10px;
       outline:none;
       background:#fff;
       color:var(--ink);
@@ -82,10 +82,9 @@
     <div class="card">
       <div class="titlebar">
         <div>
-          <h1>TrackLab Admin-Lite（Form）</h1>
-          <div class="sub">只做 preset 当前 stage 的表单填写/更新；不含 preview/generate/feedback/jobs/outcomes。</div>
+          <h2 style="margin:0 0 6px 0;">TrackLab 角色升级平台</h2>
+          <div class="sub">声明：本页仅用于角色升级后的表单填写。</div>
         </div>
-        <div id="status" class="status">就绪</div>
       </div>
     </div>
 
@@ -105,7 +104,7 @@
           <select id="packVersion"></select>
         </div>
       </div>
-      <div class="stagehint" id="schemaHint">Schema 未加载</div>
+       <div id="status" class="status" style="margin-top:10px;"></div>
     </div>
 
     <!-- ③ 选择账号（对齐工作台） -->
@@ -171,22 +170,22 @@
 
     <!-- ⑤ 表单区 -->
     <div class="card">
-      <div class="blocktitle">三、表单（自动回填；仅当前 stage 可编辑）</div>
-      <div class="sub">展示：stage ≤ 当前 stage 的字段；隐藏：未来字段。保存按钮在当前 stage 表单底部。</div>
+      <div class="blocktitle">三、表单填写</div>
+      <div class="sub">此处将显示当前及之前所有阶段的表单内容；仅当前阶段可进行填写；后续阶段不进行展示。</div>
       <div class="sep"></div>
 
       <div id="formContainer"></div>
 
       <div class="row" style="margin-top:12px;">
-        <button id="btnSave" class="btn primary" disabled>保存当前阶段表单</button>
+        <button id="btnSave" class="btn primary" disabled>更新并保存新表单</button>
         <span class="sub" id="saveHint">请选择账号与角色后编辑。</span>
       </div>
     </div>
 
     <!-- ⑥ 调试：预览更新后的 prompt -->
     <div class="card">
-      <div class="blocktitle">调试（预览更新后的 prompt）</div>
-      <pre id="debugPrompt">(empty)</pre>
+      <div class="blocktitle">脚本预览（不可修改）</div>
+      <pre id="debugPrompt">最新脚本，可在此处预览</pre>
     </div>
 
   </div>
@@ -195,4 +194,5 @@
 </body>
 
 </html>
+
 
