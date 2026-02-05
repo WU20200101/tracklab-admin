@@ -1,4 +1,10 @@
 /* /public/form/form.js */
+function on(id, event, handler){
+  const el = document.getElementById(id);
+  if (!el) return; // ⭐ 核心：不存在就跳过
+  el.addEventListener(event, handler);
+}
+
 const EMPTY_TEXT = "请选择";
 const LS_OWNER_KEY = "tracklab_owner_id";
 const LS_ACCOUNT_KEY = "tracklab_account_id";
@@ -128,23 +134,23 @@ function minStage(arr){
 
 /** ------- init ------- **/
 window.addEventListener("DOMContentLoaded", ()=>{
-  $("btnLoad").addEventListener("click", ()=> boot().catch(e=>setStatus("err", e.message)));
-  $("packId").addEventListener("change", ()=> boot().catch(e=>setStatus("err", e.message)));
-  $("packVersion").addEventListener("change", ()=> boot().catch(e=>setStatus("err", e.message)));
+  $("btnLoad")?.addEventListener("click", ()=> boot().catch(e=>setStatus("err", e.message)));
+  $("packId")?.addEventListener("change", ()=> boot().catch(e=>setStatus("err", e.message)));
+  $("packVersion")?.addEventListener("change", ()=> boot().catch(e=>setStatus("err", e.message)));
 
-  $("ownerSelect").addEventListener("change", ()=> {
+  $("ownerSelect")?.addEventListener("change", ()=> {
     localStorage.setItem(LS_OWNER_KEY, $("ownerSelect").value);
     boot().catch(e=>setStatus("err", e.message));
   });
 
-  $("accountSelect").addEventListener("change", ()=> {
+  $("accountSelect")?.addEventListener("change", ()=> {
     localStorage.setItem(LS_ACCOUNT_KEY, $("accountSelect").value);
     presetRefreshList().catch(e=>setStatus("err", e.message));
   });
 
-  $("presetSelect").addEventListener("change", ()=> presetLoadAndRender().catch(e=>setStatus("err", e.message)));
+  $("presetSelect")?.addEventListener("change", ()=> presetLoadAndRender().catch(e=>setStatus("err", e.message)));
 
-  $("btnSave").addEventListener("click", ()=> saveCurrentStage().catch(e=>setStatus("err", e.message)));
+  $("btnSave")?.addEventListener("click", ()=> saveCurrentStage().catch(e=>setStatus("err", e.message)));
 });
 
 /** ------- pack schema ------- **/
@@ -426,3 +432,4 @@ async function boot(){
     setStatus("err", e.message);
   }
 }
+
