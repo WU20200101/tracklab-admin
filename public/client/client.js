@@ -197,13 +197,15 @@ async function loadOwners() {
 
 async function accountList() {
   const owner_id = getOwnerIdStrict();
-  
   const pack_id = getPackId();
+  const pack_version = getPackVersion();
 
   const url =
-  `${apiBase()}/account/list` +
-  `?owner_id=${encodeURIComponent(owner_id)}` +
-  `&pack_id=${encodeURIComponent(pack_id)}`;
+    `${apiBase()}/account/list` +
+    `?owner_id=${encodeURIComponent(owner_id)}` +
+    `&pack_id=${encodeURIComponent(pack_id)}` +
+    `&pack_version=${encodeURIComponent(pack_version)}` +
+    `&enabled=1`;
 
   setStatus("info", "账号刷新中…");
   const out = await httpJson(url, { method: "GET" });
@@ -738,6 +740,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
