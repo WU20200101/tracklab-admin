@@ -118,22 +118,15 @@
       /* max-width: 9em; */
       /* word-break: break-word; */
     }
-    
-    /* === 表单字段标题（问题领域 / 问题状态 / 表达姿态） === */
-    .form .field-title,
-    .form .field > label:first-child,
-    .form .group-title {
-      font-size: 14px;          /* 你要的 14px */
-      font-weight: 600;
-      color: #111827;           /* 深一点 */
-      margin-bottom: 6px;
-      display: block;
-    }
 
-    /* 可选：让标题和上一个字段拉开一点层级 */
-    .form .field {
-      margin-top: 16px;
-    }
+    #formContainer .fieldcard > div[style*="margin-bottom"] > label {
+  display: block;
+  font-size: 14px;      /* 你要的 14px */
+  font-weight: 600;     /* 更“深一层” */
+  color: #111827;
+  margin: 0 0 8px;
+}
+
   </style>
 </head>
 <body>
@@ -252,6 +245,7 @@
 </body>
 
 </html>
+
 
 
 
