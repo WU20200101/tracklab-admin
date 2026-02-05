@@ -279,7 +279,7 @@ function renderForm(){
 
   c.innerHTML = "";
   if (!uiSchema || !currentPreset){
-    c.innerHTML = `<div class="sub">此处将显示当前及之前所有阶段的表单内容；仅当前阶段可进行填写；后续阶段不进行展示。</div>`;
+    c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
     return;
   }
 
@@ -293,7 +293,7 @@ function renderForm(){
   });
 
   if (visible.length === 0){
-    c.innerHTML = `<div class="sub">(empty)</div>`;
+    c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
     return;
   }
 
@@ -505,8 +505,9 @@ function clearPresetInfo(){
 function clearForm(){
   const c = $("formContainer");
   if (c) c.innerHTML = `<div class="sub">(empty)</div>`;
-  if ($("debugPrompt")) $("debugPrompt").textContent = "(empty)";
+  if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
+
 
 
 
