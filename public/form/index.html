@@ -73,37 +73,51 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
-    /* multi_enum 横排 pill */
+    /* multi_enum 横排 pill（修正：对齐+断行） */
 .checks{
   display:flex;
   flex-wrap:wrap;
-  gap:10px;
+  gap:12px;
   margin-top:8px;
 }
 
 .checks .check{
-  display:inline-flex;          /* 覆盖全局 label block */
+  display:inline-flex;
   align-items:center;
-  gap:8px;
-  padding:8px 12px;
+  justify-content:center;
+  gap:10px;
+  padding:10px 14px;
+  min-height:44px;              /* ✅ 关键：别太扁 */
   border:1px solid var(--line, #E5E7EB);
   border-radius:999px;
   background:#fff;
   cursor:pointer;
   user-select:none;
-  margin:0;                     /* 避免被全局 margin 拉开 */
-}
-
-.checks .check input[type="checkbox"]{
   margin:0;
 }
 
-.checks .check span{
-  line-height:1;
-  font-size:14px;
-  color:var(--ink, #111827);
+.checks .check input[type="checkbox"]{
+  width:18px;
+  height:18px;
+  margin:0;
+  flex:0 0 auto;
 }
 
+/* ✅ 关键：让文字不要被挤成竖排 */
+.checks .check span{
+  display:inline-block;
+  line-height:1.15;
+  font-size:14px;
+  color:var(--ink, #111827);
+
+  /* 两种选一： */
+  /* A：不换行（推荐短选项） */
+  white-space:nowrap;
+
+  /* B：如果你选项可能很长，用这两行替代 A */
+  /* max-width: 9em; */
+  /* word-break: break-word; */
+}
   </style>
 </head>
 <body>
@@ -222,6 +236,7 @@
 </body>
 
 </html>
+
 
 
 
