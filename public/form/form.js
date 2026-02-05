@@ -505,8 +505,9 @@ function clearPresetInfo(){
 function clearForm(){
   const c = $("formContainer");
   if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
-  if ($("debugPrompt")) $("debugPrompt").textContent = "当前阶段暂无可填写表单";
+  if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
+
 
 
 
