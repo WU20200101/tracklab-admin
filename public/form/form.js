@@ -410,8 +410,7 @@ function buildInputForField(field, value){
   }
 
   // ✅ 多选：multi_enum
-  if (type === "multi_enum"){
-    function renderMultiCheckbox(field, values, onChange) {
+  function renderMultiCheckbox(field, values, onChange) {
   const wrap = document.createElement("div");
   wrap.className = "chk-row";
 
@@ -553,6 +552,7 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
+
 
 
 
