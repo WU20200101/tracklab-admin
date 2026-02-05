@@ -217,37 +217,62 @@ async function handleAccountChanged(){
 
 
 /** ------- presets ------- **/
+function normalizeStageFilter(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  if (s === "全部级别" || s === "全部" || s.toLowerCase() === "all") return "";
+  if (/^S[0-3]$/i.test(s)) return s.toUpperCase();
+  if (/^[0-3]$/.test(s)) return `S${s}`;
+  const m = s.match(/([0-3])/);
+  if (m) return `S${m[1]}`;
+  return "";
+}
+
 async function presetRefreshList(){
   setStatus("ok","加载角色列表…");
 
-  const enabled = $("onlyEnabled")?.value ?? "";
-const stage = $("stageFilter")?.value ?? "";
+  // 兼容不同 id（你两个页面命名不一致时也不炸）
+  const enabledRaw =
+    ($("onlyEnabled")?.value ?? $("enabledOnly")?.value ?? "").toString().trim();
+  const stageRaw =
+    ($("stageFilter")?.value ?? "").toString().trim();
 
-const qs = new URLSearchParams();
-qs.set("pack_id", getPackId());
-qs.set("pack_version", getPackVersion());
+  const enabled = enabledRaw;                 // "" / "0" / "1"
+  const stage = normalizeStageFilter(stageRaw); // "" / "S0-S3"
 
-// stage：只有 S0-S3 才传；“全部级别”不传
-if (/^S[0-3]$/.test(stage)) {
-  qs.set("stage", stage);
+  const qs = new URLSearchParams();
+  qs.set("pack_id", getPackId());
+  qs.set("pack_version", getPackVersion());
+
+  // ✅ 只有明确选择某级才传 stage
+  if (stage) qs.set("stage", stage);
+
+  // ✅ 只有明确选择 0/1 才传 enabled；“全部角色（含淘汰）”就不传
+  if (enabled === "0" || enabled === "1") qs.set("enabled", enabled);
+
+  // ✅ 始终按账号过滤（form 必须是“选账号→看角色”）
+  if (currentAccountId) qs.set("account_id", currentAccountId);
+
+  const url = `${apiBase()}/preset/list?${qs.toString()}`;
+  // console.log("PRESET LIST URL =", url);
+
+  const out = await httpjson(url, { method:"GET" });
+  const items = out.items || [];
+
+  const sel = $("presetSelect");
+  if (!sel) return;
+
+  sel.innerHTML = items.length
+    ? [`<option value="">请选择</option>`].concat(items.map(it=>{
+        const badge = Number(it.enabled)===1 ? "" : "（已淘汰）";
+        return `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)} [${escapeHtml(it.stage)}] ${badge} (${escapeHtml(it.updated_at||"")})</option>`;
+      })).join("")
+    : `<option value="">当前筛选条件无角色</option>`;
+
+  // ✅ 不自动选中
+  sel.value = "";
 }
 
-console.log(
-    "PRESET LIST URL =",
-    `${apiBase()}/preset/list?${qs.toString()}`
-  );
-
-  const out = await httpjson(
-    `${apiBase()}/preset/list?${qs.toString()}`,
-    { method:"GET" }
-  );
-
-console.log("PRESET LIST items =", (out.items || []).length, out);
-  
-// enabled：只有 "0"/"1" 才传；“全部角色”不传
-if (enabled === "0" || enabled === "1") {
-  qs.set("enabled", enabled);
-}
 
 if (currentAccountId) qs.set("account_id", currentAccountId);
 
@@ -540,6 +565,7 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
+
 
 
 
