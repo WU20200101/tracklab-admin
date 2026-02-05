@@ -262,10 +262,9 @@ async function accountCreate() {
 async function presetRefreshList() {
   const pack_id = getPackId();
   const pack_version = getPackVersion();
-  const stage = normalizeStageFilter($("stageFilter")?.value);
+  const stage = $("stageFilter").value;
   const enabled = $("enabledOnly").value;
 
-  // 取当前选择的 account_id（没选就不带过滤，兼容旧行为）
   const account_id = ($("accountSelect").value || "").trim();
 
   let url =
@@ -274,8 +273,6 @@ async function presetRefreshList() {
 
   if (stage) url += `&stage=${encodeURIComponent(stage)}`;
   if (enabled !== "") url += `&enabled=${encodeURIComponent(enabled)}`;
-
-  // ✅ 按 account 过滤（需要你 worker /preset/list 支持 account_id）
   if (account_id) url += `&account_id=${encodeURIComponent(account_id)}`;
 
   setStatus("info", "角色刷新中…");
@@ -284,9 +281,19 @@ async function presetRefreshList() {
 
   const sel = $("presetSelect");
   sel.innerHTML = "";
+
   const empty = document.createElement("option");
   empty.value = "";
-  empty.textContent = EMPTY_TEXT;
+
+  // ✅ 三态文案：未选账号 / 有账号但无结果 / 有结果
+  if (!account_id) {
+    empty.textContent = "请选择有效账号";
+  } else if (items.length === 0) {
+    empty.textContent = "当前筛选条件无角色";
+  } else {
+    empty.textContent = "请选择";
+  }
+
   sel.appendChild(empty);
 
   items.forEach((it) => {
@@ -724,6 +731,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
