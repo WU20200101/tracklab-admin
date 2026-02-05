@@ -237,7 +237,7 @@ async function accountCreate() {
 async function presetRefreshList() {
   const pack_id = getPackId();
   const pack_version = getPackVersion();
-  const stage = $("stageFilter").value;
+  const stage = normalizeStageFilter($("stageFilter")?.value);
   const enabled = $("enabledOnly").value;
 
   // 取当前选择的 account_id（没选就不带过滤，兼容旧行为）
@@ -340,6 +340,26 @@ function pick(obj, keys) {
     if (obj && Object.prototype.hasOwnProperty.call(obj, k) && obj[k] != null) return obj[k];
   }
   return null;
+}
+
+function normalizeStageFilter(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+
+  // 常见“全部级别/不限/All”
+  if (s === "全部级别" || s === "全部" || s.toLowerCase() === "all") return "";
+
+  // 已经是 S0-S3
+  if (/^S[0-3]$/i.test(s)) return s.toUpperCase();
+
+  // "0" "1" "2" "3"
+  if (/^[0-3]$/.test(s)) return `S${s}`;
+
+  // "3级" / "3 级" / "Level 3"
+  const m = s.match(/([0-3])/);
+  if (m) return `S${m[1]}`;
+
+  return ""; // 兜底：不传 stage
 }
 
 function normalizeTags(v) {
@@ -638,6 +658,10 @@ function bindEvents() {
   $("ownerId")?.addEventListener("change", () => handleOwnerChanged().catch(showError));
   $("accountSelect")?.addEventListener("change", () => handleAccountChanged().catch(showError));
   $("presetSelect")?.addEventListener("change", () => presetLoad().catch(showError));
+
+  // ✅补：级别/有效性筛选变化时刷新角色列表
+  $("stageFilter")?.addEventListener("change", () => presetRefreshList().catch(showError));
+  $("enabledOnly")?.addEventListener("change", () => presetRefreshList().catch(showError));
 
   $("btnAccountRefresh")?.addEventListener("click", () => accountList().catch(showError));
   $("btnAccountCreate")?.addEventListener("click", () => accountCreate().catch(showError));
