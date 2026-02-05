@@ -212,7 +212,7 @@ async function handleAccountChanged(){
   }
 
   await presetRefreshList();
-  await presetLoadAndRender(); // 你如果有这步
+  // await presetLoadAndRender(); // 你如果有这步
 }
 
 
@@ -220,15 +220,24 @@ async function handleAccountChanged(){
 async function presetRefreshList(){
   setStatus("ok","加载角色列表…");
 
-  const enabled = $("onlyEnabled")?.value ?? ""; // 你页面是 select，保留原逻辑
-  const stage = $("stageFilter")?.value ?? "";
+  const enabled = $("onlyEnabled")?.value ?? "";
+const stage = $("stageFilter")?.value ?? "";
 
-  const qs = new URLSearchParams();
-  qs.set("pack_id", getPackId());
-  qs.set("pack_version", getPackVersion());
-  if (stage) qs.set("stage", stage);
-  qs.set("enabled", enabled);              // "" 表示不过滤
-  if (currentAccountId) qs.set("account_id", currentAccountId);
+const qs = new URLSearchParams();
+qs.set("pack_id", getPackId());
+qs.set("pack_version", getPackVersion());
+
+// stage：只有 S0-S3 才传；“全部级别”不传
+if (/^S[0-3]$/.test(stage)) {
+  qs.set("stage", stage);
+}
+
+// enabled：只有 "0"/"1" 才传；“全部角色”不传
+if (enabled === "0" || enabled === "1") {
+  qs.set("enabled", enabled);
+}
+
+if (currentAccountId) qs.set("account_id", currentAccountId);
 
   const out = await httpjson(`${apiBase()}/preset/list?${qs.toString()}`, { method:"GET" });
   const items = out.items || [];
@@ -241,9 +250,9 @@ async function presetRefreshList(){
         const badge = Number(it.enabled)===1 ? "" : "（已淘汰）";
         return `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)} [${escapeHtml(it.stage)}] ${badge} (${escapeHtml(it.updated_at||"")})</option>`;
       })).join("")
-    : `<option value="">该账号暂无有效角色</option>`;
+    : `<option value="">当前筛选条件无角色</option>`;
 
-  if (items.length === 1) sel.value = items[0].id;
+  // if (items.length === 1) sel.value = items[0].id;
 }
 
 async function presetLoadAndRender(){
@@ -519,6 +528,7 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
+
 
 
 
