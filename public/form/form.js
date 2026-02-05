@@ -279,7 +279,7 @@ function renderForm(){
 
   c.innerHTML = "";
   if (!uiSchema || !currentPreset){
-    c.innerHTML = `<div class="sub">(empty)</div>`;
+    c.innerHTML = `<div class="sub">此处将显示当前及之前所有阶段的表单内容；仅当前阶段可进行填写；后续阶段不进行展示。</div>`;
     return;
   }
 
@@ -507,5 +507,6 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">(empty)</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "(empty)";
 }
+
 
 
