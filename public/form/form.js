@@ -1,25 +1,10 @@
-/* /public/form/form.js */
+/* /public/form/form.js (TrackLab Admin-Lite) */
 const EMPTY_TEXT = "请选择";
 const LS_OWNER_KEY = "tracklab_owner_id";
 const LS_ACCOUNT_KEY = "tracklab_account_id";
 
 function $(id){ return document.getElementById(id); }
-
-// 安全事件绑定：元素不存在则跳过（避免 DOM 差异导致脚本中断）
-function on(id, evt, fn){
-  const el = $(id);
-  if (!el) return;
-  el.addEventListener(evt, fn);
-}
-
-function setControlDisabled(root, disabled){
-  if (!root) return;
-  if (root instanceof HTMLInputElement || root instanceof HTMLSelectElement || root instanceof HTMLTextAreaElement){
-    root.disabled = disabled;
-    return;
-  }
-  root.querySelectorAll("input,select,textarea,button").forEach(el=>{ el.disabled = disabled; });
-}
+function on(id, evt, fn){ const el = $(id); if (el) el.addEventListener(evt, fn); }
 
 function setStatus(type, msg){
   const el = $("status");
@@ -31,10 +16,7 @@ function setStatus(type, msg){
 async function httpjson(url, opt={}){
   const res = await fetch(url, {
     ...opt,
-    headers: {
-      "content-type":"application/json",
-      ...(opt.headers||{})
-    }
+    headers: { "content-type":"application/json", ...(opt.headers||{}) }
   });
   const text = await res.text();
   let data = null;
@@ -46,12 +28,16 @@ async function httpjson(url, opt={}){
   return data;
 }
 
-/** ------- 基础配置 ------- **/
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+
 function apiBase(){ return ($("apiBase")?.value || "").trim().replace(/\/+$/,""); }
 function getPackId(){ return $("packId")?.value || ""; }
 function getPackVersion(){ return $("packVersion")?.value || ""; }
 
-/** ------- stage 排序：S0 < S1 < ... ------- **/
 function stageRank(s){
   if (!s) return -1;
   const m = String(s).match(/^S(\d+)$/i);
@@ -62,69 +48,76 @@ function minStage(stages){
   return stages.slice().sort((a,b)=>stageRank(a)-stageRank(b))[0];
 }
 
-// 兼容两种 schema：
-// v1: { fields: [...] }
-// v2: { groups: [{..., fields:[...]}] }
+// ✅ 兼容 schema：fields 或 groups.fields
 function getAllFieldsFromSchema(schema){
   if (!schema) return [];
   if (Array.isArray(schema.fields)) return schema.fields.map(f=>({ ...f }));
   if (Array.isArray(schema.groups)){
-    const out=[];
+    const out = [];
     for (const g of schema.groups){
-      const gfields = Array.isArray(g.fields) ? g.fields : [];
-      for (const f of gfields) out.push({ ...f, __group: (g.label||g.id||"") });
+      for (const f of (g.fields || [])){
+        out.push({ ...f, __group: (g.label||g.id||"") });
+      }
     }
     return out;
   }
   return [];
 }
 
-/** ------- 全局状态 ------- **/
+function setControlDisabled(root, disabled){
+  if (!root) return;
+  if (root instanceof HTMLInputElement || root instanceof HTMLSelectElement || root instanceof HTMLTextAreaElement){
+    root.disabled = disabled;
+    return;
+  }
+  root.querySelectorAll("input,select,textarea,button").forEach(el=>{ el.disabled = disabled; });
+}
+
+/** ------- state ------- **/
 let uiSchema = null;
 let manifest = null;
 
 let currentOwnerId = "";
 let currentAccountId = "";
 let currentPresetId = "";
-let currentPreset = null;     // /preset/get item
-let currentPayload = {};      // 解析后的 payload
+let currentPreset = null;
+let currentPayload = {};
 let currentStage = "S0";
 
-/** ------- 页面初始化 ------- **/
-async function boot(){
-  // API base：固定（你也可以改成可编辑）
+/** ------- boot ------- **/
+window.addEventListener("DOMContentLoaded", ()=>{
+  // 固定 API base（你页面上是只读灰色）
   if ($("apiBase")) $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
 
-  // pack 下拉：最小实现（你现在只有 xhs / v1.0.0）
+  // 你当前只用 xhs/v1.0.0（保持）
   if ($("packId")) $("packId").innerHTML = `<option value="xhs">小红书</option>`;
   if ($("packVersion")) $("packVersion").innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
 
   bindEvents();
 
-  await loadPackSchema();
-  await loadOwners();
-  await handleOwnerChanged(); // 自动拉账号 + 自动拉 preset
-  setStatus("ok","就绪");
-}
+  boot().catch(e=>setStatus("err", e.message));
+});
 
 function bindEvents(){
-  on("packId","change", async ()=> {
-    await loadPackSchema().catch(e=>setStatus("err", e.message));
-    await handleOwnerChanged().catch(e=>setStatus("err", e.message));
-  });
-  on("packVersion","change", async ()=> {
-    await loadPackSchema().catch(e=>setStatus("err", e.message));
-    await handleOwnerChanged().catch(e=>setStatus("err", e.message));
-  });
+  on("btnLoad", "click", ()=> boot().catch(e=>setStatus("err", e.message)));
+  on("packId", "change", ()=> boot().catch(e=>setStatus("err", e.message)));
+  on("packVersion", "change", ()=> boot().catch(e=>setStatus("err", e.message)));
 
-  on("ownerId","change", ()=> handleOwnerChanged().catch(e=>setStatus("err", e.message)));
-  on("accountSelect","change", ()=> handleAccountChanged().catch(e=>setStatus("err", e.message)));
+  on("ownerId", "change", ()=> handleOwnerChanged().catch(e=>setStatus("err", e.message)));
+  on("accountSelect", "change", ()=> handleAccountChanged().catch(e=>setStatus("err", e.message)));
 
-  on("onlyEnabled","change", ()=> presetRefreshList().catch(e=>setStatus("err", e.message)));
-  on("stageFilter","change", ()=> presetRefreshList().catch(e=>setStatus("err", e.message)));
-  on("presetSelect","change", ()=> presetLoadAndRender().catch(e=>setStatus("err", e.message)));
+  on("onlyEnabled", "change", ()=> presetRefreshList().catch(e=>setStatus("err", e.message)));
+  on("stageFilter", "change", ()=> presetRefreshList().catch(e=>setStatus("err", e.message)));
+  on("presetSelect", "change", ()=> presetLoadAndRender().catch(e=>setStatus("err", e.message)));
 
-  on("btnSave","click", ()=> saveCurrentStage().catch(e=>setStatus("err", e.message)));
+  on("btnSave", "click", ()=> saveCurrentStage().catch(e=>setStatus("err", e.message)));
+}
+
+async function boot(){
+  await loadPackSchema();
+  await loadOwners();
+  await handleOwnerChanged();
+  setStatus("ok","就绪");
 }
 
 /** ------- pack schema ------- **/
@@ -133,12 +126,13 @@ async function loadPackSchema(){
   const out = await httpjson(`${apiBase()}/pack/${getPackId()}/${getPackVersion()}`);
   manifest = out.manifest;
   uiSchema = out.ui_schema;
-  if ($("schemaHint")) $("schemaHint").textContent = `Schema 已加载：${uiSchema?.meta?.name || "ui_schema"} (${getPackId()} / ${getPackVersion()})`;
+  if ($("schemaHint")) $("schemaHint").textContent =
+    `Schema 已加载：${uiSchema?.meta?.name || "ui_schema"} (${getPackId()} / ${getPackVersion()})`;
   setStatus("ok","Schema 已加载");
 }
 
-/** ------- owners / accounts ------- **/
-async function loadOwners() {
+/** ------- owners/accounts ------- **/
+async function loadOwners(){
   const sel = $("ownerId");
   if (!sel) return;
   sel.innerHTML = "";
@@ -148,172 +142,143 @@ async function loadOwners() {
   empty.textContent = EMPTY_TEXT;
   sel.appendChild(empty);
 
-  // 后端接口：/owner/list
-  const out = await httpjson(`${apiBase()}/owner/list`, { method: "GET" });
-  const items = out.items || out.owners || [];
+  // 你当前接口：/owner/list -> {items:[id,...]}
+  const out = await httpjson(`${apiBase()}/owner/list`, { method:"GET" });
+  const items = out.items || [];
 
-  for (const it of items){
-    const id = it.owner_id || it.id || it;
+  items.forEach((id)=>{
     const opt = document.createElement("option");
     opt.value = String(id);
     opt.textContent = String(id);
     sel.appendChild(opt);
-  }
+  });
 
-  const saved = localStorage.getItem(LS_OWNER_KEY);
-  if (saved) sel.value = saved;
-
-  currentOwnerId = sel.value || "";
+  const saved = localStorage.getItem(LS_OWNER_KEY) || "";
+  if (saved && items.includes(saved)) sel.value = saved;
 }
 
 async function handleOwnerChanged(){
-  const sel = $("ownerId");
-  if (!sel) return;
-
-  currentOwnerId = sel.value || "";
+  currentOwnerId = $("ownerId")?.value || "";
   localStorage.setItem(LS_OWNER_KEY, currentOwnerId);
 
-  await loadAccounts();
+  currentAccountId = "";
+  clearPresetInfo();
+  clearForm();
+
+  if (!currentOwnerId){
+    if ($("accountSelect")) $("accountSelect").innerHTML = `<option value="">(empty)</option>`;
+    if ($("presetSelect")) $("presetSelect").innerHTML = `<option value="">(empty)</option>`;
+    return;
+  }
+
+  await refreshAccounts();
   await handleAccountChanged();
 }
 
-async function loadAccounts(){
+async function refreshAccounts(){
+  setStatus("ok","加载账号…");
+  const out = await httpjson(`${apiBase()}/account/list?owner_id=${encodeURIComponent(currentOwnerId)}`, { method:"GET" });
+  const items = out.items || [];
+
   const sel = $("accountSelect");
   if (!sel) return;
-  sel.innerHTML = "";
 
-  const empty = document.createElement("option");
-  empty.value = "";
-  empty.textContent = EMPTY_TEXT;
-  sel.appendChild(empty);
+  sel.innerHTML = items.length
+    ? items.map(it=>`<option value="${escapeHtml(it.id)}">${escapeHtml(it.handle||it.id)} (${escapeHtml(it.updated_at||"")})</option>`).join("")
+    : `<option value="">(empty)</option>`;
 
-  if (!currentOwnerId) return;
-
-  // 后端接口：/account/list?owner_id=...
-  const out = await httpjson(`${apiBase()}/account/list?owner_id=${encodeURIComponent(currentOwnerId)}`, { method: "GET" });
-  const items = out.items || out.accounts || [];
-
-  for (const it of items){
-    const id = it.account_id || it.id || it;
-    const opt = document.createElement("option");
-    opt.value = String(id);
-    opt.textContent = String(id);
-    sel.appendChild(opt);
-  }
-
-  const saved = localStorage.getItem(LS_ACCOUNT_KEY);
-  if (saved) sel.value = saved;
+  const saved = localStorage.getItem(LS_ACCOUNT_KEY) || "";
+  if (saved && items.some(x=>x.id===saved)) sel.value = saved;
 
   currentAccountId = sel.value || "";
 }
 
 async function handleAccountChanged(){
-  const sel = $("accountSelect");
-  if (!sel) return;
-
-  currentAccountId = sel.value || "";
+  currentAccountId = $("accountSelect")?.value || "";
   localStorage.setItem(LS_ACCOUNT_KEY, currentAccountId);
 
+  clearPresetInfo();
+  clearForm();
+
   await presetRefreshList();
+  await presetLoadAndRender();
 }
 
-/** ------- preset list/load ------- **/
+/** ------- presets ------- **/
 async function presetRefreshList(){
-  const sel = $("presetSelect");
-  if (!sel) return;
+  setStatus("ok","加载角色列表…");
 
-  sel.innerHTML = "";
-  const empty = document.createElement("option");
-  empty.value = "";
-  empty.textContent = EMPTY_TEXT;
-  sel.appendChild(empty);
+  const enabled = $("onlyEnabled")?.value ?? ""; // 你页面是 select，保留原逻辑
+  const stage = $("stageFilter")?.value ?? "";
 
-  if (!currentOwnerId || !currentAccountId) {
-    clearPresetMeta();
-    renderForm();
-    $("saveHint") && ($("saveHint").textContent = "请选择账号与角色后编辑。");
-    return;
-  }
-
-  const onlyEnabled = $("onlyEnabled")?.checked ? 1 : 0;
-  const stageFilter = $("stageFilter")?.value || "";
-
-  const qs = new URLSearchParams({
-    owner_id: currentOwnerId,
-    account_id: currentAccountId,
-    pack_id: getPackId(),
-    pack_version: getPackVersion(),
-    only_enabled: String(onlyEnabled),
-    stage: stageFilter,
-    limit: "200",
-  });
+  const qs = new URLSearchParams();
+  qs.set("pack_id", getPackId());
+  qs.set("pack_version", getPackVersion());
+  if (stage) qs.set("stage", stage);
+  qs.set("enabled", enabled);              // "" 表示不过滤
+  if (currentAccountId) qs.set("account_id", currentAccountId);
 
   const out = await httpjson(`${apiBase()}/preset/list?${qs.toString()}`, { method:"GET" });
   const items = out.items || [];
 
-  for (const p of items){
-    const id = p.id;
-    const st = p.stage || "S0";
-    const label = `${p.name || id} [${st}]`;
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = label;
-    sel.appendChild(opt);
-  }
-
-  // 自动选第一个
-  if (items.length > 0) {
-    sel.value = items[0].id;
-    await presetLoadAndRender();
-  } else {
-    clearPresetMeta();
-    renderForm();
-    $("saveHint") && ($("saveHint").textContent = "当前筛选条件下没有角色。");
-    $("debugPrompt") && ($("debugPrompt").textContent = "(empty)");
-  }
-}
-
-async function presetLoadAndRender(){
   const sel = $("presetSelect");
   if (!sel) return;
 
-  const id = sel.value;
-  currentPresetId = id;
+  sel.innerHTML = items.length
+    ? [`<option value="">请选择</option>`].concat(items.map(it=>{
+        const badge = Number(it.enabled)===1 ? "" : "（已淘汰）";
+        return `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)} [${escapeHtml(it.stage)}] ${badge} (${escapeHtml(it.updated_at||"")})</option>`;
+      })).join("")
+    : `<option value="">(empty)</option>`;
 
-  if (!id){
-    clearPresetMeta();
-    renderForm();
-    $("debugPrompt") && ($("debugPrompt").textContent = "(empty)");
+  if (items.length === 1) sel.value = items[0].id;
+}
+
+async function presetLoadAndRender(){
+  const preset_id = $("presetSelect")?.value || "";
+  if (!preset_id){
+    clearPresetInfo();
+    clearForm();
     return;
   }
 
-  const out = await httpjson(`${apiBase()}/preset/get?id=${encodeURIComponent(id)}`, { method:"GET" });
-  currentPreset = out.preset || out.item || out;
-  currentStage = currentPreset.stage || "S0";
-  currentPayload = currentPreset.payload || {};
+  setStatus("ok","加载角色详情…");
 
-  // meta 回填
-  $("presetId") && ($("presetId").value = currentPreset.id || "");
-  $("presetStage") && ($("presetStage").value = currentStage);
-  $("presetEnabled") && ($("presetEnabled").value = String(currentPreset.enabled ?? ""));
+  // ✅ 关键：严格按你 Worker 要求传 preset_id/pack_id/pack_version
+  const out = await httpjson(
+    `${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}&pack_id=${encodeURIComponent(getPackId())}&pack_version=${encodeURIComponent(getPackVersion())}`,
+    { method:"GET" }
+  );
+
+  currentPreset = out.item || out.preset || null;
+  if (!currentPreset) throw new Error("preset_not_found");
+
+  currentPresetId = currentPreset.id;
+  currentPayload = currentPreset.payload || {};
+  currentStage = currentPreset.stage || "S0";
+
+  if ($("presetId")) $("presetId").value = currentPreset.id || "";
+  if ($("presetStage")) $("presetStage").value = currentStage;
+  if ($("presetEnabled")) $("presetEnabled").value = String(currentPreset.enabled);
+
+  const disabled = Number(currentPreset.enabled) !== 1;
+  if ($("btnSave")) $("btnSave").disabled = disabled;
+  if ($("saveHint")) $("saveHint").textContent =
+    disabled ? "该角色已淘汰（enabled=0），仅可回看，不可保存。" : "仅当前 stage 字段可编辑；保存后会刷新预览 prompt。";
 
   renderForm();
 
-  // 预览更新后的 prompt（仅调试）
-  await previewPromptToDebug(currentStage, currentPayload);
-
-  // 保存提示
-  const enabled = Number(currentPreset.enabled ?? 1);
-  $("saveHint") && ($("saveHint").textContent = enabled === 1 ? "仅当前 stage 字段可编辑；保存会刷新预览 prompt。" : "该角色已淘汰，仅可查看。");
+  await previewPromptToDebug(currentStage, currentPayload).catch(()=>{});
+  setStatus("ok","角色已加载");
 }
 
-/** ------- form render ------- **/
+/** ------- render form ------- **/
 function renderForm(){
   const c = $("formContainer");
   if (!c) return;
 
   c.innerHTML = "";
-  if (!uiSchema || !currentPreset) {
+  if (!uiSchema || !currentPreset){
     c.innerHTML = `<div class="sub">(empty)</div>`;
     return;
   }
@@ -321,9 +286,9 @@ function renderForm(){
   const fields = getAllFieldsFromSchema(uiSchema);
   const curRank = stageRank(currentStage);
 
-  // 只展示 stage <= 当前 stage 的字段（按 min(editable_stages) 判断）
   const visible = fields.filter(f=>{
-    const first = minStage(f.editable_stages) || "S0";
+    const first = minStage(f.editable_stages);
+    if (!first) return false;
     return stageRank(first) <= curRank;
   });
 
@@ -332,7 +297,6 @@ function renderForm(){
     return;
   }
 
-  // 按 stage 分组：S0/S1...
   const groups = new Map();
   for (const f of visible){
     const first = minStage(f.editable_stages) || "S0";
@@ -351,15 +315,14 @@ function renderForm(){
     head.innerHTML = `<div><b>${escapeHtml(st)}</b></div><div class="pill">${stageRank(st)===curRank ? "当前阶段可编辑" : "历史阶段只读"}</div>`;
     box.appendChild(head);
 
-    const list = groups.get(st) || [];
-    for (const f of list){
+    for (const f of (groups.get(st)||[])){
       const key = f.key;
       const label = f.label || key;
 
       const isEditable =
         Array.isArray(f.editable_stages) &&
         f.editable_stages.includes(currentStage) &&
-        Number(currentPreset.enabled ?? 1) === 1;
+        Number(currentPreset.enabled)===1;
 
       const wrap = document.createElement("div");
       wrap.style.marginBottom = "10px";
@@ -407,16 +370,13 @@ function buildInputForField(field, value){
     return el;
   }
 
-  // ✅ 多选
+  // ✅ 多选：multi_enum
   if (type === "multi_enum"){
     const wrap = document.createElement("div");
     wrap.className = "checks";
-    wrap.dataset.type = "multi_enum";
-    wrap.dataset.key = field.key;
-
     const selected = new Set(Array.isArray(value) ? value : []);
-    const opts = field.options || [];
-    for (const opt of opts){
+
+    for (const opt of (field.options || [])){
       const lab = document.createElement("label");
       lab.className = "check";
 
@@ -455,7 +415,7 @@ function buildInputForField(field, value){
   return el;
 }
 
-/** ------- 保存逻辑：只写当前 stage 可编辑字段 ------- **/
+/** ------- save ------- **/
 async function saveCurrentStage(){
   if (!currentPreset?.id) throw new Error("未加载 preset");
   if (Number(currentPreset.enabled) !== 1) throw new Error("该 preset 已淘汰（enabled=0），不可保存");
@@ -471,31 +431,26 @@ async function saveCurrentStage(){
     const root = $(`fld__${key}`);
     if (!root) continue;
 
-    let v;
+    let v = null;
 
-    // ✅ multi_enum：读取勾选项 -> 数组
     if ((f.type||"") === "multi_enum"){
-      v = Array.from(
-        root.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(key)}"]:checked`)
-      ).map(x=>x.value);
+      v = Array.from(root.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(key)}"]:checked`))
+        .map(x=>x.value);
     } else {
       v = root.value;
     }
 
-    // bool：转 true/false/null
     if ((f.type||"") === "bool"){
       if (v === "true") v = true;
       else if (v === "false") v = false;
       else v = null;
     }
 
-    // 空字符串 -> null（避免污染 payload）
     if (typeof v === "string"){
       v = v.trim();
       if (v === "") v = null;
     }
 
-    // required：只在当前 stage 校验（multi_enum 也校验空数组）
     if (Array.isArray(f.required_stages) && f.required_stages.includes(currentStage)){
       if (v == null || v === "" || (Array.isArray(v) && v.length===0)){
         throw new Error(`缺少必填：${f.label || f.key}`);
@@ -511,29 +466,20 @@ async function saveCurrentStage(){
       pack_id: getPackId(),
       pack_version: getPackVersion(),
       payload: merged,
-      stage: currentStage, // 不改 stage，只回写同值
+      stage: currentStage,
     }),
   });
 
   currentPayload = merged;
-
-  await previewPromptToDebug(currentStage, currentPayload);
-
+  await previewPromptToDebug(currentStage, currentPayload).catch(()=>{});
   setStatus("ok","已保存");
 }
 
-/** ------- 调试：预览更新后的 prompt（不生成内容） ------- **/
 async function previewPromptToDebug(stage, payload){
   const pre = $("debugPrompt");
   if (!pre) return;
-
-  if (!currentPreset?.id) {
-    pre.textContent = "(empty)";
-    return;
-  }
-
   const out = await httpjson(`${apiBase()}/preview`, {
-    method:"POST",
+    method: "POST",
     body: JSON.stringify({
       pack_id: getPackId(),
       pack_version: getPackVersion(),
@@ -542,29 +488,22 @@ async function previewPromptToDebug(stage, payload){
       preset_id: currentPreset.id,
     }),
   });
-
   pre.textContent = out.prompt_text || "(empty)";
 }
 
-/** ------- helpers ------- **/
-function clearPresetMeta(){
-  $("presetId") && ($("presetId").value = "");
-  $("presetStage") && ($("presetStage").value = "");
-  $("presetEnabled") && ($("presetEnabled").value = "");
+/** ------- ui clear ------- **/
+function clearPresetInfo(){
+  currentPresetId = "";
   currentPreset = null;
   currentPayload = {};
   currentStage = "S0";
+  if ($("presetId")) $("presetId").value = "";
+  if ($("presetStage")) $("presetStage").value = "";
+  if ($("presetEnabled")) $("presetEnabled").value = "";
+  if ($("saveHint")) $("saveHint").textContent = "请选择账号与角色后编辑。";
 }
-
-function escapeHtml(s){
-  return String(s ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
+function clearForm(){
+  const c = $("formContainer");
+  if (c) c.innerHTML = `<div class="sub">(empty)</div>`;
+  if ($("debugPrompt")) $("debugPrompt").textContent = "(empty)";
 }
-
-window.addEventListener("DOMContentLoaded", ()=>{
-  boot().catch(e=>setStatus("err", e.message));
-});
