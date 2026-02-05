@@ -166,8 +166,8 @@ async function handleOwnerChanged(){
   clearForm();
 
   if (!currentOwnerId){
-    if ($("accountSelect")) $("accountSelect").innerHTML = `<option value="">(empty)</option>`;
-    if ($("presetSelect")) $("presetSelect").innerHTML = `<option value="">(empty)</option>`;
+    if ($("accountSelect")) $("accountSelect").innerHTML = `<option value="">请选择用户名</option>`;
+    if ($("presetSelect")) $("presetSelect").innerHTML = `<option value="">请选择用户名</option>`;
     return;
   }
 
@@ -507,3 +507,4 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">(empty)</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "(empty)";
 }
+
