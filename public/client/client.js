@@ -11,6 +11,9 @@ const EMPTY_TEXT = "请选择";
 
 let currentPreset = null; // preset/get item
 
+const LS_OWNER_KEY = "tracklab_owner_id";
+const LS_ACCOUNT_KEY = "tracklab_account_id";
+
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -162,6 +165,9 @@ async function loadOwners() {
     sel.appendChild(opt);
   });
 
+  // 还原上次选择（如果仍存在）
+  const saved = localStorage.getItem(LS_OWNER_KEY) || "";
+  if (saved && items.includes(saved)) sel.value = saved;
 }
 
 async function accountList() {
@@ -187,6 +193,10 @@ async function accountList() {
 
   setPre("accountOut", out);
 
+  // 还原上次 account（同一 owner 下）
+  const savedAccount = localStorage.getItem(LS_ACCOUNT_KEY) || "";
+  if (savedAccount && items.some((x) => x.id === savedAccount)) {
+    sel.value = savedAccount;
   }
 
   setStatus("ok", `Accounts：${items.length} 个`);
@@ -215,6 +225,10 @@ async function accountCreate() {
 
   await accountList();
 
+  if (out?.account?.id) {
+    $("accountSelect").value = out.account.id;
+    localStorage.setItem(LS_ACCOUNT_KEY, out.account.id);
+  }
 
   // 创建后立即刷新 presets（按新 account 过滤）
   await presetRefreshList();
@@ -595,6 +609,8 @@ function showError(e) {
 
 async function handleOwnerChanged() {
   const owner = ($("ownerId").value || "").trim();
+  localStorage.setItem(LS_OWNER_KEY, owner);
+  localStorage.removeItem(LS_ACCOUNT_KEY);
 
   clearAccountsUI();
   clearPresetsUI();
@@ -602,6 +618,9 @@ async function handleOwnerChanged() {
   if (!owner) return;
   await accountList();
 
+  // accountList 可能恢复了上次 account；同步保存
+  const currentAccount = ($("accountSelect").value || "").trim();
+  if (currentAccount) localStorage.setItem(LS_ACCOUNT_KEY, currentAccount);
 
   // 有 account 才刷新 presets（否则 list 会是全量 enabled=1）
   if (currentAccount) await presetRefreshList();
@@ -609,6 +628,7 @@ async function handleOwnerChanged() {
 
 async function handleAccountChanged() {
   const account = ($("accountSelect").value || "").trim();
+  localStorage.setItem(LS_ACCOUNT_KEY, account);
 
   clearPresetsUI();
   if (!account) return;
@@ -668,13 +688,17 @@ async function boot() {
   setStatus("info", "初始化 owners 中…");
   await loadOwners();
 
+  // 如果已经有保存的 owner，触发一次联动加载
+  const savedOwner = localStorage.getItem(LS_OWNER_KEY) || "";
+  if (savedOwner) {
+    $("ownerId").value = savedOwner;
+    await handleOwnerChanged();
   }
 
   setStatus("ok", "就绪");
 }
 
 boot().catch(showError);
-
 
 
 
