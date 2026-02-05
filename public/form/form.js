@@ -135,31 +135,25 @@ async function loadPackSchema(){
 async function loadOwners(){
   const sel = $("ownerId");
   if (!sel) return;
-  sel.innerHTML = "";
 
-  const empty = document.createElement("option");
-  empty.value = "";
-  empty.textContent = EMPTY_TEXT;
-  sel.appendChild(empty);
+  // 只保留一个空选项：请选择
+  sel.innerHTML = `<option value="">请选择</option>`;
+  sel.value = ""; // 强制默认
 
-  // 你当前接口：/owner/list -> {items:[id,...]}
   const out = await httpjson(`${apiBase()}/owner/list`, { method:"GET" });
   const items = out.items || [];
 
-  items.forEach((id)=>{
+  items.forEach(id=>{
     const opt = document.createElement("option");
     opt.value = String(id);
     opt.textContent = String(id);
     sel.appendChild(opt);
   });
-
-  const saved = localStorage.getItem(LS_OWNER_KEY) || "";
-  if (saved && items.includes(saved)) sel.value = saved;
 }
+
 
 async function handleOwnerChanged(){
   currentOwnerId = $("ownerId")?.value || "";
-  localStorage.setItem(LS_OWNER_KEY, currentOwnerId);
 
   currentAccountId = "";
   clearPresetInfo();
@@ -177,32 +171,50 @@ async function handleOwnerChanged(){
 
 async function refreshAccounts(){
   setStatus("ok","加载账号…");
-  const out = await httpjson(`${apiBase()}/account/list?owner_id=${encodeURIComponent(currentOwnerId)}`, { method:"GET" });
+  const out = await httpjson(
+    `${apiBase()}/account/list?owner_id=${encodeURIComponent(currentOwnerId)}`,
+    { method:"GET" }
+  );
   const items = out.items || [];
 
   const sel = $("accountSelect");
   if (!sel) return;
 
-  sel.innerHTML = items.length
-    ? items.map(it=>`<option value="${escapeHtml(it.id)}">${escapeHtml(it.handle||it.id)} (${escapeHtml(it.updated_at||"")})</option>`).join("")
-    : `<option value="">(empty)</option>`;
+  if (!items.length){
+    sel.innerHTML = `<option value="">请先选择用户名</option>`;
+    sel.value = "";
+    currentAccountId = "";
+    return;
+  }
 
-  const saved = localStorage.getItem(LS_ACCOUNT_KEY) || "";
-  if (saved && items.some(x=>x.id===saved)) sel.value = saved;
+  sel.innerHTML = [`<option value="">请选择</option>`].concat(
+    items.map(it=>{
+      const handle = (it.handle && String(it.handle).trim()) ? it.handle : "(no handle)";
+      return `<option value="${escapeHtml(it.id)}">${escapeHtml(handle)} (${escapeHtml(it.updated_at||"")})</option>`;
+    })
+  ).join("");
 
-  currentAccountId = sel.value || "";
+  // 不记录上次账号：不读/写 localStorage
+  sel.value = "";              // 强制默认“请选择”
+  currentAccountId = "";       // 账号未选中
 }
+
 
 async function handleAccountChanged(){
   currentAccountId = $("accountSelect")?.value || "";
-  localStorage.setItem(LS_ACCOUNT_KEY, currentAccountId);
 
   clearPresetInfo();
   clearForm();
 
+  if (!currentAccountId){
+    if ($("presetSelect")) $("presetSelect").innerHTML = `<option value="">请选择有效账号</option>`;
+    return;
+  }
+
   await presetRefreshList();
-  await presetLoadAndRender();
+  await presetLoadAndRender(); // 你如果有这步
 }
+
 
 /** ------- presets ------- **/
 async function presetRefreshList(){
@@ -229,7 +241,7 @@ async function presetRefreshList(){
         const badge = Number(it.enabled)===1 ? "" : "（已淘汰）";
         return `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)} [${escapeHtml(it.stage)}] ${badge} (${escapeHtml(it.updated_at||"")})</option>`;
       })).join("")
-    : `<option value="">(empty)</option>`;
+    : `<option value="">该账号暂无有效角色</option>`;
 
   if (items.length === 1) sel.value = items[0].id;
 }
@@ -507,6 +519,7 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
+
 
 
 
