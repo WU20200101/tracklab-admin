@@ -171,10 +171,26 @@ async function handleOwnerChanged(){
 
 async function refreshAccounts(){
   setStatus("ok","加载账号…");
+
+  const pack_id = getPackId();
+  const pack_version = getPackVersion();
+
+  // 可选：更早报错，避免打到后端
+  if (!pack_id) throw new Error("pack_id_required");
+  if (!pack_version) throw new Error("pack_version_required");
+
+  const qs = new URLSearchParams({
+    owner_id: currentOwnerId,
+    pack_id,
+    pack_version,
+    enabled: "1",
+  });
+
   const out = await httpjson(
-    `${apiBase()}/account/list?owner_id=${encodeURIComponent(currentOwnerId)}`,
+    `${apiBase()}/account/list?${qs.toString()}`,
     { method:"GET" }
   );
+
   const items = out.items || [];
 
   const sel = $("accountSelect");
@@ -545,4 +561,5 @@ function clearForm(){
   const c = $("formContainer");
   if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
+
 }
