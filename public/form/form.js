@@ -410,36 +410,30 @@ function buildInputForField(field, value){
   }
 
   // ✅ 多选：multi_enum
-  function renderMultiCheckbox(field, values, onChange) {
-  const wrap = document.createElement("div");
-  wrap.className = "chk-row";
+  if (type === "multi_enum"){
+    const wrap = document.createElement("div");
+    wrap.className = "checks";
+    const selected = new Set(Array.isArray(value) ? value : []);
 
-  (field.options || []).forEach(opt => {
-    const label = document.createElement("label");
-    label.className = "chk-chip";
+    for (const opt of (field.options || [])){
+      const lab = document.createElement("label");
+      lab.className = "check";
 
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = Array.isArray(values) && values.includes(opt.value);
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.name = field.key;
+      cb.value = opt.value;
+      cb.checked = selected.has(opt.value);
 
-    input.addEventListener("change", () => {
-      const next = new Set(Array.isArray(values) ? values : []);
-      if (input.checked) next.add(opt.value);
-      else next.delete(opt.value);
-      onChange(Array.from(next));
-    });
+      const span = document.createElement("span");
+      span.textContent = opt.label || opt.value;
 
-    const text = document.createElement("span");
-    text.textContent = opt.label ?? String(opt.value);
-
-    label.appendChild(input);
-    label.appendChild(text);
-    wrap.appendChild(label);
-  });
-
-  return wrap;
-}
-
+      lab.appendChild(cb);
+      lab.appendChild(span);
+      wrap.appendChild(lab);
+    }
+    return wrap;
+  }
 
   if (type === "bool"){
     const el = document.createElement("select");
@@ -552,17 +546,3 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
