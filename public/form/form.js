@@ -232,6 +232,18 @@ if (/^S[0-3]$/.test(stage)) {
   qs.set("stage", stage);
 }
 
+console.log(
+    "PRESET LIST URL =",
+    `${apiBase()}/preset/list?${qs.toString()}`
+  );
+
+  const out = await httpjson(
+    `${apiBase()}/preset/list?${qs.toString()}`,
+    { method:"GET" }
+  );
+
+console.log("PRESET LIST items =", (out.items || []).length, out);
+  
 // enabled：只有 "0"/"1" 才传；“全部角色”不传
 if (enabled === "0" || enabled === "1") {
   qs.set("enabled", enabled);
@@ -528,6 +540,7 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
+
 
 
 
