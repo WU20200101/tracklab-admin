@@ -273,25 +273,6 @@ async function presetRefreshList(){
   sel.value = "";
 }
 
-
-if (currentAccountId) qs.set("account_id", currentAccountId);
-
-  const out = await httpjson(`${apiBase()}/preset/list?${qs.toString()}`, { method:"GET" });
-  const items = out.items || [];
-
-  const sel = $("presetSelect");
-  if (!sel) return;
-
-  sel.innerHTML = items.length
-    ? [`<option value="">请选择</option>`].concat(items.map(it=>{
-        const badge = Number(it.enabled)===1 ? "" : "（已淘汰）";
-        return `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)} [${escapeHtml(it.stage)}] ${badge} (${escapeHtml(it.updated_at||"")})</option>`;
-      })).join("")
-    : `<option value="">当前筛选条件无角色</option>`;
-
-  // if (items.length === 1) sel.value = items[0].id;
-}
-
 async function presetLoadAndRender(){
   const preset_id = $("presetSelect")?.value || "";
   if (!preset_id){
@@ -565,6 +546,7 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
+
 
 
 
