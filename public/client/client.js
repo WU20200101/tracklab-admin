@@ -6,6 +6,31 @@
  * - 保留：preview / generate / feedback / outcome / stats
  */
 
+/** ===== storage control ===== **/
+const REMEMBER_LAST = false; // ← 只要是 false，就完全不记忆
+
+function lsGet(key) {
+  if (!REMEMBER_LAST) return "";
+  try {
+    return lsGet(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function lsSet(key, value) {
+  if (!REMEMBER_LAST) return;
+  try {
+    lsSet(key, value);
+  } catch {}
+}
+
+function lsDel(key) {
+  try {
+    lsDel(key);
+  } catch {}
+}
+
 const $ = (id) => document.getElementById(id);
 const EMPTY_TEXT = "请选择";
 
@@ -166,7 +191,7 @@ async function loadOwners() {
   });
 
   // 还原上次选择（如果仍存在）
-  const saved = localStorage.getItem(LS_OWNER_KEY) || "";
+  const saved = lsGet(LS_OWNER_KEY) || "";
   if (saved && items.includes(saved)) sel.value = saved;
 }
 
@@ -194,7 +219,7 @@ async function accountList() {
   setPre("accountOut", out);
 
   // 还原上次 account（同一 owner 下）
-  const savedAccount = localStorage.getItem(LS_ACCOUNT_KEY) || "";
+  const savedAccount = lsGet(LS_ACCOUNT_KEY) || "";
   if (savedAccount && items.some((x) => x.id === savedAccount)) {
     sel.value = savedAccount;
   }
@@ -227,7 +252,7 @@ async function accountCreate() {
 
   if (out?.account?.id) {
     $("accountSelect").value = out.account.id;
-    localStorage.setItem(LS_ACCOUNT_KEY, out.account.id);
+    lsSet(LS_ACCOUNT_KEY, out.account.id);
   }
 
   // 创建后立即刷新 presets（按新 account 过滤）
@@ -609,8 +634,8 @@ function showError(e) {
 
 async function handleOwnerChanged() {
   const owner = ($("ownerId").value || "").trim();
-  localStorage.setItem(LS_OWNER_KEY, owner);
-  localStorage.removeItem(LS_ACCOUNT_KEY);
+  lsSet(LS_OWNER_KEY, owner);
+  lsDel(LS_ACCOUNT_KEY);
 
   clearAccountsUI();
   clearPresetsUI();
@@ -620,7 +645,7 @@ async function handleOwnerChanged() {
 
   // accountList 可能恢复了上次 account；同步保存
   const currentAccount = ($("accountSelect").value || "").trim();
-  if (currentAccount) localStorage.setItem(LS_ACCOUNT_KEY, currentAccount);
+  if (currentAccount) lsSet(LS_ACCOUNT_KEY, currentAccount);
 
   // 有 account 才刷新 presets（否则 list 会是全量 enabled=1）
   if (currentAccount) await presetRefreshList();
@@ -628,7 +653,7 @@ async function handleOwnerChanged() {
 
 async function handleAccountChanged() {
   const account = ($("accountSelect").value || "").trim();
-  localStorage.setItem(LS_ACCOUNT_KEY, account);
+  lsSet(LS_ACCOUNT_KEY, account);
 
   clearPresetsUI();
   if (!account) return;
@@ -689,7 +714,7 @@ async function boot() {
   await loadOwners();
 
   // 如果已经有保存的 owner，触发一次联动加载
-  const savedOwner = localStorage.getItem(LS_OWNER_KEY) || "";
+  const savedOwner = lsGet(LS_OWNER_KEY) || "";
   if (savedOwner) {
     $("ownerId").value = savedOwner;
     await handleOwnerChanged();
@@ -699,6 +724,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
