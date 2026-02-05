@@ -488,7 +488,7 @@ async function previewPromptToDebug(stage, payload){
       preset_id: currentPreset.id,
     }),
   });
-  pre.textContent = out.prompt_text || "(empty)";
+  pre.textContent = out.prompt_text || "保存后将显示生成脚本预览";
 }
 
 /** ------- ui clear ------- **/
@@ -507,6 +507,7 @@ function clearForm(){
   if (c) c.innerHTML = `<div class="sub">(empty)</div>`;
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 }
+
 
 
 
