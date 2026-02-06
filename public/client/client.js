@@ -1,7 +1,7 @@
 /* TrackLab Client (Refactor v2026-02-06)
  * - 结构分区：Storage / DOM / HTTP / Getters / UI / Loaders / Actions / Bind / Boot
  * - 修复 localStorage helper 的递归 bug
- * - 去重 httpjson/httpJson：保留一个 httpjson
+ * - 去重 httpjson/httpJson：保留一个 httpJson
  * - 保持原有业务逻辑：owner -> accounts -> presets，preview/generate/feedback/outcome/stats 不改
  */
 
@@ -77,7 +77,7 @@
   /** =====================================================
    * HTTP
    * ===================================================== */
-  async function httpjson(url, options = {}) {
+  async function httpJson(url, options = {}) {
     const res = await fetch(url, {
       ...options,
       headers: {
@@ -202,7 +202,7 @@
     sel.innerHTML = `<option value="">请选择</option>`;
     sel.value = "";
 
-    const out = await httpjson(`${apiBase()}/user/list?enabled=1`, { method: "GET" });
+    const out = await httpJson(`${apiBase()}/user/list?enabled=1`, { method: "GET" });
     const items = out.items || [];
 
     items.forEach((u) => {
@@ -234,7 +234,7 @@
       `&enabled=1`;
 
     setStatus("info", "账号刷新中…");
-    const out = await httpjson(url, { method: "GET" });
+    const out = await httpJson(url, { method: "GET" });
 
     const items = out.items || [];
     const sel = $("accountSelect");
@@ -281,7 +281,7 @@
     if (account_id) url += `&account_id=${encodeURIComponent(account_id)}`;
 
     setStatus("info", "角色刷新中…");
-    const out = await httpjson(url, { method: "GET" });
+    const out = await httpJson(url, { method: "GET" });
     const items = out.items || [];
 
     const sel = $("presetSelect");
@@ -317,7 +317,7 @@
       `&pack_version=${encodeURIComponent(getPackVersion())}`;
 
     setStatus("info", "加载 preset 状态中…");
-    const out = await httpjson(url, { method: "GET" });
+    const out = await httpJson(url, { method: "GET" });
     if (!out.item) throw new Error("preset_get 返回为空");
 
     currentPreset = out.item;
@@ -342,7 +342,7 @@
     };
 
     setStatus("info", "账号创建中…");
-    const out = await httpjson(`${apiBase()}/account/create`, {
+    const out = await httpJson(`${apiBase()}/account/create`, {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -373,7 +373,7 @@
     };
 
     setStatus("info", "绑定 preset → account 中…");
-    const out = await httpjson(`${apiBase()}/preset/bind_account`, {
+    const out = await httpJson(`${apiBase()}/preset/bind_account`, {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -388,7 +388,7 @@
     if (!currentPreset?.id) await presetLoad();
     ensurePresetEnabledForOps();
 
-    const out = await httpjson(`${apiBase()}/preview`, {
+    const out = await httpJson(`${apiBase()}/preview`, {
       method: "POST",
       body: JSON.stringify({
         pack_id: getPackId(),
@@ -438,7 +438,7 @@
     ensurePresetEnabledForOps();
 
     setStatus("info", "Generate 中…");
-    const out = await httpjson(`${apiBase()}/generate`, {
+    const out = await httpJson(`${apiBase()}/generate`, {
       method: "POST",
       body: JSON.stringify({
         pack_id: getPackId(),
@@ -525,7 +525,7 @@
     };
 
     setStatus("info", "feedback/upsert 提交中…");
-    const out = await httpjson(`${apiBase()}/feedback/upsert`, {
+    const out = await httpJson(`${apiBase()}/feedback/upsert`, {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -604,7 +604,7 @@
     };
 
     setStatus("info", "outcome/upsert 提交中…");
-    const out = await httpjson(`${apiBase()}/outcome/upsert`, {
+    const out = await httpJson(`${apiBase()}/outcome/upsert`, {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -617,7 +617,7 @@
     const preset_id = getPresetIdStrict();
     setStatus("info", "拉取 stats/preset 中…");
     const url = `${apiBase()}/stats/preset?preset_id=${encodeURIComponent(preset_id)}`;
-    const out = await httpjson(url, { method: "GET" });
+    const out = await httpJson(url, { method: "GET" });
     setPre("statsOut", out);
     setStatus("ok", "Stats 已更新");
   }
