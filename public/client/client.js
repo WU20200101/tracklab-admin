@@ -197,12 +197,6 @@ async function loadOwners(){
   });
 }
 
-
-  // 还原上次选择（如果仍存在）
-  const saved = lsGet(LS_OWNER_KEY) || "";
-  if (saved && items.includes(saved)) sel.value = saved;
-}
-
 async function accountList() {
   const owner_id = getOwnerIdStrict();
   const pack_id = getPackId();
@@ -748,6 +742,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
