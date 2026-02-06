@@ -1,25 +1,12 @@
-/* TrackLab Client (Refactor v2026-02-06)
- * - 结构分区：Storage / DOM / HTTP / Getters / UI / Loaders / Actions / Bind / Boot
- * - 修复 localStorage helper 的递归 bug
- * - 去重 httpjson/httpJson：保留一个 httpJson
- * - 保持原有业务逻辑：owner -> accounts -> presets，preview/generate/feedback/outcome/stats 不改
- */
-
 (() => {
-  /** =====================================================
-   * CONFIG
-   * ===================================================== */
-  const REMEMBER_LAST = false; // false = 完全不记忆
+  const REMEMBER_LAST = false;
 
   const EMPTY_TEXT = "请选择";
   const LS_OWNER_KEY = "tracklab_owner_id";
   const LS_ACCOUNT_KEY = "tracklab_account_id";
 
-  let currentPreset = null; // preset/get item
+  let currentPreset = null;
 
-  /** =====================================================
-   * DOM HELPERS
-   * ===================================================== */
   const $ = (id) => document.getElementById(id);
 
   function escapeHtml(s) {
@@ -32,67 +19,48 @@
   }
 
   function setStatus(type, msg) {
-    const el = $("status");
+    const el = $("js-status");
     if (!el) return;
-    if (!msg) {
-      el.innerHTML = "";
-      return;
-    }
-    el.innerHTML = `<div class="${type}">${escapeHtml(msg)}</div>`;
+
+    el.className = "ui-status " + (
+      type === "ok" ? "ui-status--ok" :
+      type === "error" ? "ui-status--err" :
+      type === "warn" ? "ui-status--warn" :
+      "ui-status--info"
+    );
+
+    el.textContent = msg || "";
   }
 
   function setPre(id, obj) {
     const el = $(id);
-    if (!el) return; // UI 删了也不报错
+    if (!el) return;
     el.textContent =
       obj == null ? EMPTY_TEXT : typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
   }
 
-  /** =====================================================
-   * STORAGE HELPERS (FIXED)
-   * ===================================================== */
   function lsGet(key) {
     if (!REMEMBER_LAST) return "";
-    try {
-      return localStorage.getItem(key) || "";
-    } catch {
-      return "";
-    }
+    try { return localStorage.getItem(key) || ""; } catch { return ""; }
   }
-
   function lsSet(key, value) {
     if (!REMEMBER_LAST) return;
-    try {
-      localStorage.setItem(key, String(value ?? ""));
-    } catch {}
+    try { localStorage.setItem(key, String(value ?? "")); } catch {}
   }
-
   function lsDel(key) {
     if (!REMEMBER_LAST) return;
-    try {
-      localStorage.removeItem(key);
-    } catch {}
+    try { localStorage.removeItem(key); } catch {}
   }
 
-  /** =====================================================
-   * HTTP
-   * ===================================================== */
   async function httpJson(url, options = {}) {
     const res = await fetch(url, {
       ...options,
-      headers: {
-        "content-type": "application/json",
-        ...(options.headers || {}),
-      },
+      headers: { "content-type": "application/json", ...(options.headers || {}) },
     });
 
     const text = await res.text();
     let data = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = { raw: text };
-    }
+    try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
 
     if (!res.ok) {
       const msg = (data && (data.message || data.error)) || text || `HTTP ${res.status}`;
@@ -101,66 +69,45 @@
     return data || {};
   }
 
-  // 如你之前所做：挂全局，避免作用域/顺序问题
-  window.httpjson = httpJson;
-
-  /** =====================================================
-   * GETTERS
-   * ===================================================== */
   function apiBase() {
-    const v = ($("apiBase")?.value || "").trim().replace(/\/+$/, "");
+    const v = ($("js-api-base")?.value || "").trim().replace(/\/+$/, "");
     if (!v) throw new Error("接口地址不能为空");
     return v;
   }
-
-  function getPackId() {
-    return $("packId")?.value || "";
-  }
-
-  function getPackVersion() {
-    const el = $("packVer") || $("packVersion");
-    if (!el) throw new Error("版本号缺失");
-    const v = (el.value || "").trim();
-    if (!v) throw new Error("版本号不能为空");
-    return v;
-  }
+  function getPackId() { return $("js-pack-id")?.value || ""; }
+  function getPackVersion() { return ($("js-pack-version")?.value || "").trim(); }
 
   function getOwnerIdStrict() {
-    const v = ($("ownerId")?.value || "").trim();
+    const v = ($("js-owner-select")?.value || "").trim();
     if (!v) throw new Error("用户名为空：先选择用户名");
     return v;
   }
   function getAccountIdStrict() {
-    const v = ($("accountSelect")?.value || "").trim();
+    const v = ($("js-account-select")?.value || "").trim();
     if (!v) throw new Error("账号为空：先选择账号");
     return v;
   }
   function getPresetIdStrict() {
-    const v = ($("presetSelect")?.value || "").trim();
+    const v = ($("js-preset-select")?.value || "").trim();
     if (!v) throw new Error("角色为空：先选择角色");
     return v;
   }
 
-  /** =====================================================
-   * UI STATE
-   * ===================================================== */
   function ensurePresetEnabledForOps() {
     if (!currentPreset) throw new Error("未加载角色");
-    if (Number(currentPreset.enabled) !== 1) {
-      throw new Error("该角色已淘汰，不可预览脚本、生成内容、填写反馈、填写交易记录");
-    }
+    if (Number(currentPreset.enabled) !== 1) throw new Error("该角色已淘汰，不可操作");
   }
 
   function applyEnabledUi(enabled) {
     const disabled = Number(enabled) !== 1;
-    if ($("btnPreview")) $("btnPreview").disabled = disabled;
-    if ($("btnGenerate")) $("btnGenerate").disabled = disabled;
-    if ($("btnFeedbackUpsert")) $("btnFeedbackUpsert").disabled = disabled;
-    if ($("btnOutcomeUpsert")) $("btnOutcomeUpsert").disabled = disabled;
+    if ($("js-preview-btn")) $("js-preview-btn").disabled = disabled;
+    if ($("js-generate-btn")) $("js-generate-btn").disabled = disabled;
+    if ($("js-feedback-submit-btn")) $("js-feedback-submit-btn").disabled = disabled;
+    if ($("js-outcome-submit-btn")) $("js-outcome-submit-btn").disabled = disabled;
   }
 
   function clearPresetsUI() {
-    const sel = $("presetSelect");
+    const sel = $("js-preset-select");
     if (!sel) return;
     sel.innerHTML = "";
     const empty = document.createElement("option");
@@ -171,7 +118,7 @@
   }
 
   function clearAccountsUI() {
-    const sel = $("accountSelect");
+    const sel = $("js-account-select");
     if (!sel) return;
     sel.innerHTML = "";
     const empty = document.createElement("option");
@@ -192,11 +139,8 @@
     if (el && !el.value) el.value = todayYMD();
   }
 
-  /** =====================================================
-   * LOADERS
-   * ===================================================== */
   async function loadOwners() {
-    const sel = $("ownerId");
+    const sel = $("js-owner-select");
     if (!sel) return;
 
     sel.innerHTML = `<option value="">请选择</option>`;
@@ -208,15 +152,14 @@
     items.forEach((u) => {
       const id = String(u.id || "").trim();
       if (!id) return;
-
       const label =
         (u.display_name && String(u.display_name).trim()) ||
         (u.username && String(u.username).trim()) ||
         id;
 
       const opt = document.createElement("option");
-      opt.value = id; // users.id
-      opt.textContent = label; // display_name / username / id
+      opt.value = id;
+      opt.textContent = label;
       sel.appendChild(opt);
     });
   }
@@ -237,7 +180,7 @@
     const out = await httpJson(url, { method: "GET" });
 
     const items = out.items || [];
-    const sel = $("accountSelect");
+    const sel = $("js-account-select");
     if (!sel) return;
 
     sel.innerHTML = "";
@@ -253,13 +196,10 @@
       sel.appendChild(opt);
     });
 
-    setPre("accountOut", out);
+    setPre("js-account-out", out);
 
-    // 还原上次 account（同一 owner 下）
     const savedAccount = lsGet(LS_ACCOUNT_KEY) || "";
-    if (savedAccount && items.some((x) => x.id === savedAccount)) {
-      sel.value = savedAccount;
-    }
+    if (savedAccount && items.some((x) => x.id === savedAccount)) sel.value = savedAccount;
 
     setStatus("ok", `Accounts：${items.length} 个`);
   }
@@ -267,10 +207,10 @@
   async function presetRefreshList() {
     const pack_id = getPackId();
     const pack_version = getPackVersion();
-    const stage = $("stageFilter")?.value || "";
-    const enabled = $("enabledOnly")?.value ?? "";
+    const stage = $("js-stage-filter")?.value || "";
+    const enabled = $("js-preset-enabled-filter")?.value ?? "";
 
-    const account_id = ($("accountSelect")?.value || "").trim();
+    const account_id = ($("js-account-select")?.value || "").trim();
 
     let url =
       `${apiBase()}/preset/list?pack_id=${encodeURIComponent(pack_id)}` +
@@ -284,14 +224,13 @@
     const out = await httpJson(url, { method: "GET" });
     const items = out.items || [];
 
-    const sel = $("presetSelect");
+    const sel = $("js-preset-select");
     if (!sel) return;
 
     sel.innerHTML = "";
     const empty = document.createElement("option");
     empty.value = "";
 
-    // 三态文案：未选账号 / 有账号但无结果 / 有结果
     if (!account_id) empty.textContent = "请选择有效账号";
     else if (items.length === 0) empty.textContent = "当前筛选条件无角色";
     else empty.textContent = "请选择";
@@ -305,7 +244,7 @@
       sel.appendChild(opt);
     });
 
-    setPre("presetOut", { ok: true, items_count: items.length });
+    setPre("js-preset-out", { ok: true, items_count: items.length, items });
     setStatus("ok", `Presets：${items.length} 条`);
   }
 
@@ -321,43 +260,30 @@
     if (!out.item) throw new Error("preset_get 返回为空");
 
     currentPreset = out.item;
-    setPre("presetOut", out.item);
+    setPre("js-preset-out", out.item);
     setStatus("ok", `Preset 已加载：${out.item.name || out.item.id}`);
     applyEnabledUi(out.item.enabled);
   }
 
-  /** =====================================================
-   * ACTIONS
-   * ===================================================== */
   async function accountCreate() {
     const owner_id = getOwnerIdStrict();
-    const handle = ($("accountHandle")?.value || "").trim() || null;
+    const handle = ($("js-account-handle")?.value || "").trim() || null;
 
-    const body = {
-      pack_id: getPackId(),
-      pack_version: getPackVersion(),
-      owner_id,
-      handle,
-      note: null,
-    };
+    const body = { pack_id: getPackId(), pack_version: getPackVersion(), owner_id, handle, note: null };
 
     setStatus("info", "账号创建中…");
-    const out = await httpJson(`${apiBase()}/account/create`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+    const out = await httpJson(`${apiBase()}/account/create`, { method: "POST", body: JSON.stringify(body) });
 
-    setPre("accountOut", out);
+    setPre("js-account-out", out);
     setStatus("ok", `账号已创建：${out?.account?.id || "na"}`);
 
     await accountList();
 
-    if (out?.account?.id && $("accountSelect")) {
-      $("accountSelect").value = out.account.id;
+    if (out?.account?.id && $("js-account-select")) {
+      $("js-account-select").value = out.account.id;
       lsSet(LS_ACCOUNT_KEY, out.account.id);
     }
 
-    // 创建后立即刷新 presets（按新 account 过滤）
     await presetRefreshList();
   }
 
@@ -365,22 +291,13 @@
     const preset_id = getPresetIdStrict();
     const account_id = getAccountIdStrict();
 
-    const body = {
-      preset_id,
-      account_id,
-      pack_id: getPackId(),
-      pack_version: getPackVersion(),
-    };
+    const body = { preset_id, account_id, pack_id: getPackId(), pack_version: getPackVersion() };
 
     setStatus("info", "绑定 preset → account 中…");
-    const out = await httpJson(`${apiBase()}/preset/bind_account`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+    const out = await httpJson(`${apiBase()}/preset/bind_account`, { method: "POST", body: JSON.stringify(body) });
 
-    setPre("accountOut", out);
+    setPre("js-account-out", out);
     setStatus("ok", "绑定完成");
-
     await presetRefreshList();
   }
 
@@ -398,7 +315,7 @@
       }),
     });
 
-    setPre("previewOut", out?.prompt_text || JSON.stringify(out, null, 2));
+    setPre("js-preview-out", out?.prompt_text || JSON.stringify(out, null, 2));
     setStatus("ok", "Preview 成功");
   }
 
@@ -408,21 +325,15 @@
     }
     return null;
   }
-
   function normalizeTags(v) {
     if (v == null) return "";
-    if (Array.isArray(v))
-      return v
-        .map(String)
-        .map((x) => (x.startsWith("#") ? x : `#${x}`))
-        .join(" ");
+    if (Array.isArray(v)) return v.map(String).map((x) => (x.startsWith("#") ? x : `#${x}`)).join(" ");
     const s = String(v).trim();
     if (!s) return "";
     const parts = s.split(/[\s,，]+/).filter(Boolean);
     if (parts.length <= 1) return s.startsWith("#") ? s : `#${s}`;
     return parts.map((x) => (x.startsWith("#") ? x : `#${x}`)).join(" ");
   }
-
   function formatClientText(outputObj) {
     const title = pick(outputObj, ["title", "标题"]) ?? "";
     const subtitle = pick(outputObj, ["subtitle", "副标题", "sub_title"]) ?? "";
@@ -440,16 +351,11 @@
     setStatus("info", "Generate 中…");
     const out = await httpJson(`${apiBase()}/generate`, {
       method: "POST",
-      body: JSON.stringify({
-        pack_id: getPackId(),
-        pack_version: getPackVersion(),
-        preset_id,
-      }),
+      body: JSON.stringify({ pack_id: getPackId(), pack_version: getPackVersion(), preset_id }),
     });
 
-    setPre("genRaw", out);
-    const outputObj = out?.output || {};
-    setPre("genText", formatClientText(outputObj));
+    setPre("js-gen-raw", out);
+    setPre("js-gen-text", formatClientText(out?.output || {}));
 
     setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
   }
@@ -463,7 +369,6 @@
 
   function renderEvaluationReadable(evaluation) {
     if (!evaluation) return "（暂无评估结果）";
-
     const actionMap = {
       advance: "✅ 达到升级条件（将进入下一阶段）",
       observe: "⏳ 继续观察（暂不升级）",
@@ -497,15 +402,14 @@
       lines.push(`- 每个评估周期：${w.window_days} 天`);
       lines.push(`- 当前周期：第 ${w.window_index} 个`);
     }
-
     return lines.join("\n");
   }
 
   async function feedbackUpsert() {
     const preset_id = getPresetIdStrict();
-    ensureDateDefault("fbDate");
+    ensureDateDefault("js-fb-date");
 
-    const date = ($("fbDate")?.value || "").trim();
+    const date = ($("js-fb-date")?.value || "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date 格式必须为 YYYY-MM-DD");
 
     const body = {
@@ -514,27 +418,21 @@
       preset_id,
       date,
       totals: {
-        posts: readNonNegInt("fbPosts"),
-        views: readNonNegInt("fbViews"),
-        likes: readNonNegInt("fbLikes"),
-        collects: readNonNegInt("fbCollects"),
-        comments: readNonNegInt("fbComments"),
-        dm_inbound: readNonNegInt("fbDmInbound"),
+        posts: readNonNegInt("js-fb-posts"),
+        views: readNonNegInt("js-fb-views"),
+        likes: readNonNegInt("js-fb-likes"),
+        collects: readNonNegInt("js-fb-collects"),
+        comments: readNonNegInt("js-fb-comments"),
+        dm_inbound: readNonNegInt("js-fb-dm"),
       },
-      note: ($("fbNote")?.value || "").trim() || null,
+      note: ($("js-fb-note")?.value || "").trim() || null,
     };
 
     setStatus("info", "feedback/upsert 提交中…");
-    const out = await httpJson(`${apiBase()}/feedback/upsert`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+    const out = await httpJson(`${apiBase()}/feedback/upsert`, { method: "POST", body: JSON.stringify(body) });
 
-    setPre("evalOut", renderEvaluationReadable(out?.evaluation));
-    try {
-      await presetLoad(); // advance 后刷新 preset 事实
-    } catch {}
-
+    setPre("js-eval-out", renderEvaluationReadable(out?.evaluation));
+    try { await presetLoad(); } catch {}
     setStatus("ok", `feedback 已写入；action=${out?.evaluation?.action || "none"}`);
   }
 
@@ -546,8 +444,7 @@
 
     const leadCreated = Number(body?.lead_created || 0);
     const paid = Number(body?.paid || 0);
-    const amountYuan = Number(body?.amount_yuan || 0);
-    const amount = amountYuan.toFixed(2);
+    const amountYuan = Number(body?.amount_yuan || 0).toFixed(2);
     const leadsCount = Number(body?.leads_count || 0);
     const note = (body?.note || "").trim();
 
@@ -559,31 +456,28 @@
     if (windowLabel) lines.push(`- 统计周期：${windowLabel}`);
     lines.push(`- 新增客户：${leadCreated ? "是" : "否"}`);
     lines.push(`- 新增成交：${paid ? "是" : "否"}`);
-    if (paid) lines.push(`- 成交金额：${amount}元`);
+    if (paid) lines.push(`- 成交金额：${amountYuan}元`);
     if (leadsCount) lines.push(`- 新增客户数量：${leadsCount}`);
-    if (note) {
-      lines.push("");
-      lines.push(`备注：${note}`);
-    }
+    if (note) { lines.push(""); lines.push(`备注：${note}`); }
     return lines.join("\n");
   }
 
   async function outcomeUpsert() {
     const preset_id = getPresetIdStrict();
     const account_id = getAccountIdStrict();
-    ensureDateDefault("ocDate");
+    ensureDateDefault("js-oc-date");
 
-    const date = ($("ocDate")?.value || "").trim();
+    const date = ($("js-oc-date")?.value || "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Outcome date 格式必须为 YYYY-MM-DD");
 
     if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
     ensurePresetEnabledForOps();
 
-    const leadCreated = Number($("ocLeadCreated")?.value || 0);
-    const paid = Number($("ocPaid")?.value || 0);
+    const leadCreated = Number($("js-oc-lead-created")?.value || 0);
+    const paid = Number($("js-oc-paid")?.value || 0);
 
-    let leadsCount = Number($("ocLeadsCount")?.value || 0);
-    let amountYuan = Number($("ocAmountYuan")?.value || 0);
+    let leadsCount = Number($("js-oc-leads-count")?.value || 0);
+    let amountYuan = Number($("js-oc-amount")?.value || 0);
 
     if (leadCreated !== 1) leadsCount = 0;
     if (paid !== 1) amountYuan = 0;
@@ -595,21 +489,18 @@
       preset_id,
       job_id: null,
       date,
-      window: $("ocWindow")?.value || "daily",
+      window: $("js-oc-window")?.value || "daily",
       lead_created: leadCreated,
-      paid: paid,
+      paid,
       amount_yuan: amountYuan,
       leads_count: leadsCount,
-      note: ($("ocNote")?.value || "").trim() || null,
+      note: ($("js-oc-note")?.value || "").trim() || null,
     };
 
     setStatus("info", "outcome/upsert 提交中…");
-    const out = await httpJson(`${apiBase()}/outcome/upsert`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+    const out = await httpJson(`${apiBase()}/outcome/upsert`, { method: "POST", body: JSON.stringify(body) });
 
-    setPre("outcomeOut", renderOutcomeUpsertReadable(out, body));
+    setPre("js-outcome-out", renderOutcomeUpsertReadable(out, body));
     setStatus("ok", "Outcome 已写入");
   }
 
@@ -618,20 +509,14 @@
     setStatus("info", "拉取 stats/preset 中…");
     const url = `${apiBase()}/stats/preset?preset_id=${encodeURIComponent(preset_id)}`;
     const out = await httpJson(url, { method: "GET" });
-    setPre("statsOut", out);
+    setPre("js-stats-out", out);
     setStatus("ok", "Stats 已更新");
   }
 
-  /** =====================================================
-   * EVENT HANDLERS
-   * ===================================================== */
-  function showError(e) {
-    console.error(e);
-    setStatus("error", e?.message || String(e));
-  }
+  function showError(e) { console.error(e); setStatus("error", e?.message || String(e)); }
 
   async function handleOwnerChanged() {
-    const owner = ($("ownerId")?.value || "").trim();
+    const owner = ($("js-owner-select")?.value || "").trim();
     lsSet(LS_OWNER_KEY, owner);
     lsDel(LS_ACCOUNT_KEY);
 
@@ -642,14 +527,14 @@
 
     await accountList();
 
-    const currentAccount = ($("accountSelect")?.value || "").trim();
+    const currentAccount = ($("js-account-select")?.value || "").trim();
     if (currentAccount) lsSet(LS_ACCOUNT_KEY, currentAccount);
 
     if (currentAccount) await presetRefreshList();
   }
 
   async function handleAccountChanged() {
-    const account = ($("accountSelect")?.value || "").trim();
+    const account = ($("js-account-select")?.value || "").trim();
     lsSet(LS_ACCOUNT_KEY, account);
 
     clearPresetsUI();
@@ -658,48 +543,31 @@
     await presetRefreshList();
   }
 
-  /** =====================================================
-   * INIT
-   * ===================================================== */
   function setDefaults() {
-    const setVal = (id, val) => {
-      const el = $(id);
-      if (el) el.value = val;
-    };
-
-    setVal("apiBase", "https://tracklab-api.wuxiaofei1985.workers.dev");
-    setVal("packId", "xhs");
-
-    if ($("packVer")) setVal("packVer", "v1.0.0");
-    if ($("packVersion")) setVal("packVersion", "v1.0.0");
-
-    setVal("enabledOnly", "1");
-
-    if ($("fbDate")) ensureDateDefault("fbDate");
-    if ($("ocDate")) ensureDateDefault("ocDate");
+    if ($("js-api-base")) $("js-api-base").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
   }
 
   function bindEvents() {
-    $("ownerId")?.addEventListener("change", () => handleOwnerChanged().catch(showError));
-    $("accountSelect")?.addEventListener("change", () => handleAccountChanged().catch(showError));
-    $("presetSelect")?.addEventListener("change", () => presetLoad().catch(showError));
+    $("js-owner-select")?.addEventListener("change", () => handleOwnerChanged().catch(showError));
+    $("js-account-select")?.addEventListener("change", () => handleAccountChanged().catch(showError));
+    $("js-preset-select")?.addEventListener("change", () => presetLoad().catch(showError));
 
-    $("stageFilter")?.addEventListener("change", () => presetRefreshList().catch(showError));
-    $("enabledOnly")?.addEventListener("change", () => presetRefreshList().catch(showError));
+    $("js-stage-filter")?.addEventListener("change", () => presetRefreshList().catch(showError));
+    $("js-preset-enabled-filter")?.addEventListener("change", () => presetRefreshList().catch(showError));
 
-    $("btnAccountRefresh")?.addEventListener("click", () => accountList().catch(showError));
-    $("btnAccountCreate")?.addEventListener("click", () => accountCreate().catch(showError));
+    $("js-account-refresh-btn")?.addEventListener("click", () => accountList().catch(showError));
+    $("js-account-create-btn")?.addEventListener("click", () => accountCreate().catch(showError));
 
-    $("btnPresetRefresh")?.addEventListener("click", () => presetRefreshList().catch(showError));
-    $("btnPresetLoad")?.addEventListener("click", () => presetLoad().catch(showError));
-    $("btnPresetBindAccount")?.addEventListener("click", () => presetBindAccount().catch(showError));
+    $("js-preset-refresh-btn")?.addEventListener("click", () => presetRefreshList().catch(showError));
+    $("js-preset-load-btn")?.addEventListener("click", () => presetLoad().catch(showError));
+    $("js-preset-bind-account-btn")?.addEventListener("click", () => presetBindAccount().catch(showError));
 
-    $("btnPreview")?.addEventListener("click", () => previewPrompt().catch(showError));
-    $("btnGenerate")?.addEventListener("click", () => generateContent().catch(showError));
+    $("js-preview-btn")?.addEventListener("click", () => previewPrompt().catch(showError));
+    $("js-generate-btn")?.addEventListener("click", () => generateContent().catch(showError));
 
-    $("btnFeedbackUpsert")?.addEventListener("click", () => feedbackUpsert().catch(showError));
-    $("btnOutcomeUpsert")?.addEventListener("click", () => outcomeUpsert().catch(showError));
-    $("btnStatsPreset")?.addEventListener("click", () => statsPreset().catch(showError));
+    $("js-feedback-submit-btn")?.addEventListener("click", () => feedbackUpsert().catch(showError));
+    $("js-outcome-submit-btn")?.addEventListener("click", () => outcomeUpsert().catch(showError));
+    $("js-stats-btn")?.addEventListener("click", () => statsPreset().catch(showError));
   }
 
   async function boot() {
@@ -710,8 +578,8 @@
     await loadOwners();
 
     const savedOwner = lsGet(LS_OWNER_KEY) || "";
-    if (savedOwner && $("ownerId")) {
-      $("ownerId").value = savedOwner;
+    if (savedOwner && $("js-owner-select")) {
+      $("js-owner-select").value = savedOwner;
       await handleOwnerChanged();
     }
 
