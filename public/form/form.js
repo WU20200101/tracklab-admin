@@ -1,656 +1,575 @@
-/* /public/form/form.js (TrackLab Admin-Lite) — Refactor
- * - 分区：DOM/HTTP/Schema/State/Loaders/Render/Save/UI
- * - 不改接口、不改流程、不改字段语义
- * - 小修：apiBase 空值提前报错；packVersion 为空时报错；多选读取更稳健
- */
+/* /public/form/form.js (TrackLab Admin-Lite) */
+const EMPTY_TEXT = "请选择";
+const LS_OWNER_KEY = "tracklab_owner_id";
+const LS_ACCOUNT_KEY = "tracklab_account_id";
 
-(() => {
-  /** =====================================================
-   * CONSTANTS / DOM
-   * ===================================================== */
-  const EMPTY_TEXT = "请选择";
+function $(id){ return document.getElementById(id); }
+function on(id, evt, fn){ const el = $(id); if (el) el.addEventListener(evt, fn); }
 
-  const $ = (id) => document.getElementById(id);
-  const on = (id, evt, fn) => {
-    const el = $(id);
-    if (el) el.addEventListener(evt, fn);
-  };
+function setStatus(type, msg){
+  const el = $("status");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.className = "status" + (type === "err" ? " err" : "");
+}
 
-  function setStatus(type, msg) {
-    const el = $("status");
-    if (!el) return;
-    el.textContent = msg || "";
-    el.className = "status" + (type === "err" ? " err" : "");
+async function httpjson(url, opt={}){
+  const res = await fetch(url, {
+    ...opt,
+    headers: { "content-type":"application/json", ...(opt.headers||{}) }
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { raw:text }; }
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `${res.status} ${res.statusText}`;
+    throw new Error(msg);
   }
+  return data;
+}
 
-  function escapeHtml(s) {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
 
-  /** =====================================================
-   * HTTP
-   * ===================================================== */
-  async function httpjson(url, opt = {}) {
-    const res = await fetch(url, {
-      ...opt,
-      headers: { "content-type": "application/json", ...(opt.headers || {}) },
-    });
-    const text = await res.text();
-    let data = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = { raw: text };
-    }
-    if (!res.ok) {
-      const msg = data?.error || data?.message || `${res.status} ${res.statusText}`;
-      throw new Error(msg);
-    }
-    return data;
-  }
+function apiBase(){ return ($("apiBase")?.value || "").trim().replace(/\/+$/,""); }
+function getPackId(){ return $("packId")?.value || ""; }
+function getPackVersion(){ return $("packVersion")?.value || ""; }
 
-  /** =====================================================
-   * BASIC GETTERS
-   * ===================================================== */
-  function apiBase() {
-    const v = ($("apiBase")?.value || "").trim().replace(/\/+$/, "");
-    if (!v) throw new Error("api_base_empty");
-    return v;
-  }
-  function getPackId() {
-    return $("packId")?.value || "";
-  }
-  function getPackVersion() {
-    const v = ($("packVersion")?.value || "").trim();
-    if (!v) throw new Error("pack_version_required");
-    return v;
-  }
+function stageRank(s){
+  if (!s) return -1;
+  const m = String(s).match(/^S(\d+)$/i);
+  return m ? Number(m[1]) : 999;
+}
+function minStage(stages){
+  if (!Array.isArray(stages) || stages.length===0) return null;
+  return stages.slice().sort((a,b)=>stageRank(a)-stageRank(b))[0];
+}
 
-  /** =====================================================
-   * STAGE HELPERS
-   * ===================================================== */
-  function stageRank(s) {
-    if (!s) return -1;
-    const m = String(s).match(/^S(\d+)$/i);
-    return m ? Number(m[1]) : 999;
-  }
-  function minStage(stages) {
-    if (!Array.isArray(stages) || stages.length === 0) return null;
-    return stages.slice().sort((a, b) => stageRank(a) - stageRank(b))[0];
-  }
-
-  function normalizeStageFilter(raw) {
-    const s = String(raw ?? "").trim();
-    if (!s) return "";
-    if (s === "全部级别" || s === "全部" || s.toLowerCase() === "all") return "";
-    if (/^S[0-3]$/i.test(s)) return s.toUpperCase();
-    if (/^[0-3]$/.test(s)) return `S${s}`;
-    const m = s.match(/([0-3])/);
-    if (m) return `S${m[1]}`;
-    return "";
-  }
-
-  /** =====================================================
-   * SCHEMA HELPERS
-   * ===================================================== */
-  // ✅ 兼容 schema：fields 或 groups.fields
-  function getAllFieldsFromSchema(schema) {
-    if (!schema) return [];
-    if (Array.isArray(schema.fields)) return schema.fields.map((f) => ({ ...f }));
-    if (Array.isArray(schema.groups)) {
-      const out = [];
-      for (const g of schema.groups) {
-        for (const f of g.fields || []) {
-          out.push({ ...f, __group: g.label || g.id || "" });
-        }
+// ✅ 兼容 schema：fields 或 groups.fields
+function getAllFieldsFromSchema(schema){
+  if (!schema) return [];
+  if (Array.isArray(schema.fields)) return schema.fields.map(f=>({ ...f }));
+  if (Array.isArray(schema.groups)){
+    const out = [];
+    for (const g of schema.groups){
+      for (const f of (g.fields || [])){
+        out.push({ ...f, __group: (g.label||g.id||"") });
       }
-      return out;
     }
-    return [];
+    return out;
+  }
+  return [];
+}
+
+function setControlDisabled(root, disabled){
+  if (!root) return;
+  if (root instanceof HTMLInputElement || root instanceof HTMLSelectElement || root instanceof HTMLTextAreaElement){
+    root.disabled = disabled;
+    return;
+  }
+  root.querySelectorAll("input,select,textarea,button").forEach(el=>{ el.disabled = disabled; });
+}
+
+/** ------- state ------- **/
+let uiSchema = null;
+let manifest = null;
+
+let currentOwnerId = "";
+let currentAccountId = "";
+let currentPresetId = "";
+let currentPreset = null;
+let currentPayload = {};
+let currentStage = "S0";
+
+/** ------- boot ------- **/
+window.addEventListener("DOMContentLoaded", ()=>{
+  // 固定 API base（你页面上是只读灰色）
+  if ($("apiBase")) $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
+
+  // 你当前只用 xhs/v1.0.0（保持）
+  if ($("packId")) $("packId").innerHTML = `<option value="xhs">小红书</option>`;
+  if ($("packVersion")) $("packVersion").innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
+
+  bindEvents();
+
+  boot().catch(e=>setStatus("err", e.message));
+});
+
+function bindEvents(){
+  on("btnLoad", "click", ()=> boot().catch(e=>setStatus("err", e.message)));
+  on("packId", "change", ()=> boot().catch(e=>setStatus("err", e.message)));
+  on("packVersion", "change", ()=> boot().catch(e=>setStatus("err", e.message)));
+
+  on("ownerId", "change", ()=> handleOwnerChanged().catch(e=>setStatus("err", e.message)));
+  on("accountSelect", "change", ()=> handleAccountChanged().catch(e=>setStatus("err", e.message)));
+
+  on("onlyEnabled", "change", ()=> presetRefreshList().catch(e=>setStatus("err", e.message)));
+  on("stageFilter", "change", ()=> presetRefreshList().catch(e=>setStatus("err", e.message)));
+  on("presetSelect", "change", ()=> presetLoadAndRender().catch(e=>setStatus("err", e.message)));
+
+  on("btnSave", "click", ()=> saveCurrentStage().catch(e=>setStatus("err", e.message)));
+}
+
+async function boot(){
+  await loadPackSchema();
+  await loadOwners();
+  await handleOwnerChanged();
+  setStatus("ok","就绪");
+}
+
+/** ------- pack schema ------- **/
+async function loadPackSchema(){
+  setStatus("ok","加载 Schema…");
+  const out = await httpjson(`${apiBase()}/pack/${getPackId()}/${getPackVersion()}`);
+  manifest = out.manifest;
+  uiSchema = out.ui_schema;
+  if ($("schemaHint")) $("schemaHint").textContent =
+    `Schema 已加载：${uiSchema?.meta?.name || "ui_schema"} (${getPackId()} / ${getPackVersion()})`;
+  setStatus("ok","Schema 已加载");
+}
+
+/** ------- owners/accounts ------- **/
+async function loadOwners(){
+  const sel = $("ownerId");
+  if (!sel) return;
+
+  sel.innerHTML = `<option value="">请选择</option>`;
+  sel.value = "";
+
+  // ✅ 改为从 users 表读取：id 用于关联；display_name 用于显示
+  const out = await httpjson(`${apiBase()}/user/list?enabled=1`, { method:"GET" });
+  const items = out.items || [];
+
+  items.forEach(u=>{
+    const id = String(u.id || "").trim();
+    if (!id) return;
+
+    const label =
+      (u.display_name && String(u.display_name).trim()) ? String(u.display_name).trim()
+      : (u.username && String(u.username).trim()) ? String(u.username).trim()
+      : id;
+
+    const opt = document.createElement("option");
+    opt.value = id;          // ✅ accounts.owner_id 仍然存 users.id
+    opt.textContent = label; // ✅ 下拉显示 display_name
+    sel.appendChild(opt);
+  });
+}
+
+
+
+async function handleOwnerChanged(){
+  currentOwnerId = $("ownerId")?.value || "";
+
+  currentAccountId = "";
+  clearPresetInfo();
+  clearForm();
+
+  if (!currentOwnerId){
+    if ($("accountSelect")) $("accountSelect").innerHTML = `<option value="">请先选择用户名</option>`;
+    if ($("presetSelect")) $("presetSelect").innerHTML = `<option value="">请先选择用户名</option>`;
+    return;
   }
 
-  function setControlDisabled(root, disabled) {
-    if (!root) return;
-    if (
-      root instanceof HTMLInputElement ||
-      root instanceof HTMLSelectElement ||
-      root instanceof HTMLTextAreaElement
-    ) {
-      root.disabled = disabled;
-      return;
-    }
-    root
-      .querySelectorAll("input,select,textarea,button")
-      .forEach((el) => (el.disabled = disabled));
-  }
+  await refreshAccounts();
+  await handleAccountChanged();
+}
 
-  /** =====================================================
-   * STATE
-   * ===================================================== */
-  let uiSchema = null;
-  let manifest = null;
+async function refreshAccounts(){
+  setStatus("ok","加载账号…");
 
-  let currentOwnerId = "";
-  let currentAccountId = "";
-  let currentPreset = null;
+  const pack_id = getPackId();
+  const pack_version = getPackVersion();
 
-  let currentPayload = {};
-  let currentStage = "S0";
+  // 可选：更早报错，避免打到后端
+  if (!pack_id) throw new Error("pack_id_required");
+  if (!pack_version) throw new Error("pack_version_required");
 
-  /** =====================================================
-   * BOOT
-   * ===================================================== */
-  window.addEventListener("DOMContentLoaded", () => {
-    // 固定 API base（页面上只读灰色）
-    if ($("apiBase")) $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
-
-    // 固定 pack（你当前只用 xhs/v1.0.0）
-    if ($("packId")) $("packId").innerHTML = `<option value="xhs">小红书</option>`;
-    if ($("packVersion")) $("packVersion").innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
-
-    bindEvents();
-    boot().catch((e) => setStatus("err", e.message));
+  const qs = new URLSearchParams({
+    owner_id: currentOwnerId,
+    pack_id,
+    pack_version,
+    enabled: "1",
   });
 
-  function bindEvents() {
-    on("btnLoad", "click", () => boot().catch((e) => setStatus("err", e.message)));
-    on("packId", "change", () => boot().catch((e) => setStatus("err", e.message)));
-    on("packVersion", "change", () => boot().catch((e) => setStatus("err", e.message)));
+  const out = await httpjson(
+    `${apiBase()}/account/list?${qs.toString()}`,
+    { method:"GET" }
+  );
 
-    on("ownerId", "change", () => handleOwnerChanged().catch((e) => setStatus("err", e.message)));
-    on("accountSelect", "change", () =>
-      handleAccountChanged().catch((e) => setStatus("err", e.message))
-    );
+  const items = out.items || [];
 
-    on("onlyEnabled", "change", () => presetRefreshList().catch((e) => setStatus("err", e.message)));
-    on("stageFilter", "change", () => presetRefreshList().catch((e) => setStatus("err", e.message)));
-    on("presetSelect", "change", () =>
-      presetLoadAndRender().catch((e) => setStatus("err", e.message))
-    );
+  const sel = $("accountSelect");
+  if (!sel) return;
 
-    on("btnSave", "click", () => saveCurrentStage().catch((e) => setStatus("err", e.message)));
-  }
-
-  async function boot() {
-    await loadPackSchema();
-    await loadOwners();
-    await handleOwnerChanged();
-    setStatus("ok", "就绪");
-  }
-
-  /** =====================================================
-   * PACK SCHEMA
-   * ===================================================== */
-  async function loadPackSchema() {
-    setStatus("ok", "加载 Schema…");
-
-    const out = await httpjson(`${apiBase()}/pack/${getPackId()}/${getPackVersion()}`);
-    manifest = out.manifest;
-    uiSchema = out.ui_schema;
-
-    if ($("schemaHint")) {
-      $("schemaHint").textContent = `Schema 已加载：${
-        uiSchema?.meta?.name || "ui_schema"
-      } (${getPackId()} / ${getPackVersion()})`;
-    }
-
-    setStatus("ok", "Schema 已加载");
-  }
-
-  /** =====================================================
-   * OWNERS / ACCOUNTS
-   * ===================================================== */
-  async function loadOwners() {
-    const sel = $("ownerId");
-    if (!sel) return;
-
-    sel.innerHTML = `<option value="">请选择</option>`;
-    sel.value = "";
-
-    // ✅ users 表：value 用 id（用于关联）；显示 display_name
-    const out = await httpjson(`${apiBase()}/user/list?enabled=1`, { method: "GET" });
-    const items = out.items || [];
-
-    items.forEach((u) => {
-      const id = String(u.id || "").trim();
-      if (!id) return;
-
-      const label =
-        (u.display_name && String(u.display_name).trim()) ||
-        (u.username && String(u.username).trim()) ||
-        id;
-
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = label;
-      sel.appendChild(opt);
-    });
-  }
-
-  async function handleOwnerChanged() {
-    currentOwnerId = $("ownerId")?.value || "";
-
-    currentAccountId = "";
-    clearPresetInfo();
-    clearForm();
-
-    if (!currentOwnerId) {
-      if ($("accountSelect")) $("accountSelect").innerHTML = `<option value="">请先选择用户名</option>`;
-      if ($("presetSelect")) $("presetSelect").innerHTML = `<option value="">请先选择用户名</option>`;
-      return;
-    }
-
-    await refreshAccounts();
-    await handleAccountChanged();
-  }
-
-  async function refreshAccounts() {
-    setStatus("ok", "加载账号…");
-
-    const pack_id = getPackId();
-    const pack_version = getPackVersion();
-
-    if (!pack_id) throw new Error("pack_id_required");
-    if (!pack_version) throw new Error("pack_version_required");
-
-    const qs = new URLSearchParams({
-      owner_id: currentOwnerId,
-      pack_id,
-      pack_version,
-      enabled: "1",
-    });
-
-    const out = await httpjson(`${apiBase()}/account/list?${qs.toString()}`, { method: "GET" });
-    const items = out.items || [];
-
-    const sel = $("accountSelect");
-    if (!sel) return;
-
-    if (!items.length) {
-      sel.innerHTML = `<option value="">该用户暂无账号</option>`;
-      sel.value = "";
-      currentAccountId = "";
-      return;
-    }
-
-    sel.innerHTML = [`<option value="">请选择</option>`]
-      .concat(
-        items.map((it) => {
-          const handle = it.handle && String(it.handle).trim() ? it.handle : "(no handle)";
-          return `<option value="${escapeHtml(it.id)}">${escapeHtml(handle)} (${escapeHtml(
-            it.updated_at || ""
-          )})</option>`;
-        })
-      )
-      .join("");
-
-    // 不记录上次账号：不读/写 localStorage
+  if (!items.length){
+    sel.innerHTML = `<option value="">该用户暂无账号</option>`;
     sel.value = "";
     currentAccountId = "";
+    return;
   }
 
-  async function handleAccountChanged() {
-    currentAccountId = $("accountSelect")?.value || "";
+  sel.innerHTML = [`<option value="">请选择</option>`].concat(
+    items.map(it=>{
+      const handle = (it.handle && String(it.handle).trim()) ? it.handle : "(no handle)";
+      return `<option value="${escapeHtml(it.id)}">${escapeHtml(handle)} (${escapeHtml(it.updated_at||"")})</option>`;
+    })
+  ).join("");
 
+  // 不记录上次账号：不读/写 localStorage
+  sel.value = "";              // 强制默认“请选择”
+  currentAccountId = "";       // 账号未选中
+}
+
+
+async function handleAccountChanged(){
+  currentAccountId = $("accountSelect")?.value || "";
+
+  clearPresetInfo();
+  clearForm();
+
+  if (!currentAccountId){
+    if ($("presetSelect")) $("presetSelect").innerHTML = `<option value="">请选择有效账号</option>`;
+    return;
+  }
+
+  await presetRefreshList();
+  // await presetLoadAndRender(); // 你如果有这步
+}
+
+
+/** ------- presets ------- **/
+function normalizeStageFilter(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  if (s === "全部级别" || s === "全部" || s.toLowerCase() === "all") return "";
+  if (/^S[0-3]$/i.test(s)) return s.toUpperCase();
+  if (/^[0-3]$/.test(s)) return `S${s}`;
+  const m = s.match(/([0-3])/);
+  if (m) return `S${m[1]}`;
+  return "";
+}
+
+async function presetRefreshList(){
+  setStatus("ok","加载角色列表…");
+
+  // 兼容不同 id（你两个页面命名不一致时也不炸）
+  const enabledRaw =
+    ($("onlyEnabled")?.value ?? $("enabledOnly")?.value ?? "").toString().trim();
+  const stageRaw =
+    ($("stageFilter")?.value ?? "").toString().trim();
+
+  const enabled = enabledRaw;                 // "" / "0" / "1"
+  const stage = normalizeStageFilter(stageRaw); // "" / "S0-S3"
+
+  const qs = new URLSearchParams();
+  qs.set("pack_id", getPackId());
+  qs.set("pack_version", getPackVersion());
+
+  // ✅ 只有明确选择某级才传 stage
+  if (stage) qs.set("stage", stage);
+
+  // ✅ 只有明确选择 0/1 才传 enabled；“全部角色（含淘汰）”就不传
+  if (enabled === "0" || enabled === "1") qs.set("enabled", enabled);
+
+  // ✅ 始终按账号过滤（form 必须是“选账号→看角色”）
+  if (currentAccountId) qs.set("account_id", currentAccountId);
+
+  const url = `${apiBase()}/preset/list?${qs.toString()}`;
+  // console.log("PRESET LIST URL =", url);
+
+  const out = await httpjson(url, { method:"GET" });
+  const items = out.items || [];
+
+  const sel = $("presetSelect");
+  if (!sel) return;
+
+  sel.innerHTML = items.length
+    ? [`<option value="">请选择</option>`].concat(items.map(it=>{
+        const badge = Number(it.enabled)===1 ? "" : "（已淘汰）";
+        return `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)} [${escapeHtml(it.stage)}] ${badge} (${escapeHtml(it.updated_at||"")})</option>`;
+      })).join("")
+    : `<option value="">当前筛选条件无角色</option>`;
+
+  // ✅ 不自动选中
+  sel.value = "";
+}
+
+async function presetLoadAndRender(){
+  const preset_id = $("presetSelect")?.value || "";
+  if (!preset_id){
     clearPresetInfo();
     clearForm();
-
-    if (!currentAccountId) {
-      if ($("presetSelect")) $("presetSelect").innerHTML = `<option value="">请选择有效账号</option>`;
-      return;
-    }
-
-    await presetRefreshList();
+    return;
   }
 
-  /** =====================================================
-   * PRESETS
-   * ===================================================== */
-  async function presetRefreshList() {
-    setStatus("ok", "加载角色列表…");
+  setStatus("ok","加载角色详情…");
 
-    const enabledRaw = ($("onlyEnabled")?.value ?? $("enabledOnly")?.value ?? "").toString().trim();
-    const stageRaw = ($("stageFilter")?.value ?? "").toString().trim();
+  // ✅ 关键：严格按你 Worker 要求传 preset_id/pack_id/pack_version
+  const out = await httpjson(
+    `${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}&pack_id=${encodeURIComponent(getPackId())}&pack_version=${encodeURIComponent(getPackVersion())}`,
+    { method:"GET" }
+  );
 
-    const enabled = enabledRaw; // "" / "0" / "1"
-    const stage = normalizeStageFilter(stageRaw); // "" / "S0-S3"
+  currentPreset = out.item || out.preset || null;
+  if (!currentPreset) throw new Error("preset_not_found");
 
-    const qs = new URLSearchParams();
-    qs.set("pack_id", getPackId());
-    qs.set("pack_version", getPackVersion());
+  currentPresetId = currentPreset.id;
+  currentPayload = currentPreset.payload || {};
+  currentStage = currentPreset.stage || "S0";
 
-    if (stage) qs.set("stage", stage);
-    if (enabled === "0" || enabled === "1") qs.set("enabled", enabled);
+  if ($("presetId")) $("presetId").value = currentPreset.id || "";
+  if ($("presetStage")) $("presetStage").value = currentStage;
+  if ($("presetEnabled")) $("presetEnabled").value = String(currentPreset.enabled);
 
-    // form 必须 “选账号 → 看角色”
-    if (currentAccountId) qs.set("account_id", currentAccountId);
+  const disabled = Number(currentPreset.enabled) !== 1;
+  if ($("btnSave")) $("btnSave").disabled = disabled;
+  if ($("saveHint")) $("saveHint").textContent =
+    disabled ? "该角色已淘汰（enabled=0），仅可回看，不可保存。" : "仅当前 stage 字段可编辑；保存后会刷新预览 prompt。";
 
-    const out = await httpjson(`${apiBase()}/preset/list?${qs.toString()}`, { method: "GET" });
-    const items = out.items || [];
+  renderForm();
 
-    const sel = $("presetSelect");
-    if (!sel) return;
+  await previewPromptToDebug(currentStage, currentPayload).catch(()=>{});
+  setStatus("ok","角色已加载");
+}
 
-    sel.innerHTML = items.length
-      ? [`<option value="">请选择</option>`]
-          .concat(
-            items.map((it) => {
-              const badge = Number(it.enabled) === 1 ? "" : "（已淘汰）";
-              return `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)} [${escapeHtml(
-                it.stage
-              )}] ${badge} (${escapeHtml(it.updated_at || "")})</option>`;
-            })
-          )
-          .join("")
-      : `<option value="">当前筛选条件无角色</option>`;
+/** ------- render form ------- **/
+function renderForm(){
+  const c = $("formContainer");
+  if (!c) return;
 
-    sel.value = ""; // 不自动选中
+  c.innerHTML = "";
+  if (!uiSchema || !currentPreset){
+    c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
+    return;
   }
 
-  async function presetLoadAndRender() {
-    const preset_id = $("presetSelect")?.value || "";
-    if (!preset_id) {
-      clearPresetInfo();
-      clearForm();
-      return;
-    }
+  const fields = getAllFieldsFromSchema(uiSchema);
+  const curRank = stageRank(currentStage);
 
-    setStatus("ok", "加载角色详情…");
+  const visible = fields.filter(f=>{
+    const first = minStage(f.editable_stages);
+    if (!first) return false;
+    return stageRank(first) <= curRank;
+  });
 
-    const out = await httpjson(
-      `${apiBase()}/preset/get?preset_id=${encodeURIComponent(preset_id)}&pack_id=${encodeURIComponent(
-        getPackId()
-      )}&pack_version=${encodeURIComponent(getPackVersion())}`,
-      { method: "GET" }
-    );
-
-    currentPreset = out.item || out.preset || null;
-    if (!currentPreset) throw new Error("preset_not_found");
-
-    currentPayload = currentPreset.payload || {};
-    currentStage = currentPreset.stage || "S0";
-
-    if ($("presetId")) $("presetId").value = currentPreset.id || "";
-    if ($("presetStage")) $("presetStage").value = currentStage;
-    if ($("presetEnabled")) $("presetEnabled").value = String(currentPreset.enabled);
-
-    const disabled = Number(currentPreset.enabled) !== 1;
-    if ($("btnSave")) $("btnSave").disabled = disabled;
-    if ($("saveHint")) {
-      $("saveHint").textContent = disabled
-        ? "该角色已淘汰（enabled=0），仅可回看，不可保存。"
-        : "仅当前 stage 字段可编辑；保存后会刷新预览 prompt。";
-    }
-
-    renderForm();
-
-    await previewPromptToDebug(currentStage, currentPayload).catch(() => {});
-    setStatus("ok", "角色已加载");
+  if (visible.length === 0){
+    c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
+    return;
   }
 
-  /** =====================================================
-   * RENDER FORM
-   * ===================================================== */
-  function renderForm() {
-    const c = $("formContainer");
-    if (!c) return;
-
-    c.innerHTML = "";
-    if (!uiSchema || !currentPreset) {
-      c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
-      return;
-    }
-
-    const fields = getAllFieldsFromSchema(uiSchema);
-    const curRank = stageRank(currentStage);
-
-    const visible = fields.filter((f) => {
-      const first = minStage(f.editable_stages);
-      if (!first) return false;
-      return stageRank(first) <= curRank;
-    });
-
-    if (visible.length === 0) {
-      c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
-      return;
-    }
-
-    // group by first editable stage
-    const groups = new Map();
-    for (const f of visible) {
-      const first = minStage(f.editable_stages) || "S0";
-      if (!groups.has(first)) groups.set(first, []);
-      groups.get(first).push(f);
-    }
-
-    const stages = Array.from(groups.keys()).sort((a, b) => stageRank(a) - stageRank(b));
-
-    for (const st of stages) {
-      const box = document.createElement("div");
-      box.className = "fieldcard";
-
-      const head = document.createElement("div");
-      head.className = "fieldhead";
-      head.innerHTML = `<div><b>${escapeHtml(st)}</b></div><div class="pill">${
-        stageRank(st) === curRank ? "当前阶段可编辑" : "历史阶段只读"
-      }</div>`;
-      box.appendChild(head);
-
-      for (const f of groups.get(st) || []) {
-        const key = f.key;
-        const label = f.label || key;
-
-        const isEditable =
-          Array.isArray(f.editable_stages) &&
-          f.editable_stages.includes(currentStage) &&
-          Number(currentPreset.enabled) === 1;
-
-        const wrap = document.createElement("div");
-        wrap.style.marginBottom = "10px";
-
-        const lab = document.createElement("label");
-        const required =
-          Array.isArray(f.required_stages) && f.required_stages.includes(currentStage);
-        lab.textContent = label + (required ? " *" : "");
-        wrap.appendChild(lab);
-
-        const input = buildInputForField(f, currentPayload?.[key]);
-        input.id = `fld__${key}`;
-        setControlDisabled(input, !isEditable);
-
-        wrap.appendChild(input);
-
-        if (f.help) {
-          const help = document.createElement("div");
-          help.className = "stagehint";
-          help.textContent = f.help;
-          wrap.appendChild(help);
-        }
-
-        box.appendChild(wrap);
-      }
-
-      c.appendChild(box);
-    }
+  const groups = new Map();
+  for (const f of visible){
+    const first = minStage(f.editable_stages) || "S0";
+    if (!groups.has(first)) groups.set(first, []);
+    groups.get(first).push(f);
   }
 
-  function buildInputForField(field, value) {
-    const type = field.type || "text";
+  const stages = Array.from(groups.keys()).sort((a,b)=>stageRank(a)-stageRank(b));
 
-    if (type === "textarea") {
-      const el = document.createElement("textarea");
-      el.value = value == null ? "" : String(value);
-      return el;
-    }
+  for (const st of stages){
+    const box = document.createElement("div");
+    box.className = "fieldcard";
 
-    if (type === "enum") {
-      const el = document.createElement("select");
-      const opts = field.options || [];
-      el.innerHTML = [`<option value="">请选择</option>`]
-        .concat(
-          opts.map(
-            (o) =>
-              `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label || o.value)}</option>`
-          )
-        )
-        .join("");
-      el.value = value == null ? "" : String(value);
-      return el;
-    }
+    const head = document.createElement("div");
+    head.className = "fieldhead";
+    head.innerHTML = `<div><b>${escapeHtml(st)}</b></div><div class="pill">${stageRank(st)===curRank ? "当前阶段可编辑" : "历史阶段只读"}</div>`;
+    box.appendChild(head);
 
-    // ✅ 多选：multi_enum
-    if (type === "multi_enum") {
+    for (const f of (groups.get(st)||[])){
+      const key = f.key;
+      const label = f.label || key;
+
+      const isEditable =
+        Array.isArray(f.editable_stages) &&
+        f.editable_stages.includes(currentStage) &&
+        Number(currentPreset.enabled)===1;
+
       const wrap = document.createElement("div");
-      wrap.className = "checks";
-      const selected = new Set(Array.isArray(value) ? value : []);
+      wrap.style.marginBottom = "10px";
 
-      for (const opt of field.options || []) {
-        const lab = document.createElement("label");
-        lab.className = "check";
+      const lab = document.createElement("label");
+      lab.textContent = label + (Array.isArray(f.required_stages) && f.required_stages.includes(currentStage) ? " *" : "");
+      wrap.appendChild(lab);
 
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.name = field.key;
-        cb.value = opt.value;
-        cb.checked = selected.has(opt.value);
+      const input = buildInputForField(f, currentPayload?.[key]);
+      input.id = `fld__${key}`;
+      setControlDisabled(input, !isEditable);
 
-        const span = document.createElement("span");
-        span.textContent = opt.label || opt.value;
+      wrap.appendChild(input);
 
-        lab.appendChild(cb);
-        lab.appendChild(span);
-        wrap.appendChild(lab);
+      if (f.help){
+        const help = document.createElement("div");
+        help.className = "stagehint";
+        help.textContent = f.help;
+        wrap.appendChild(help);
       }
-      return wrap;
+
+      box.appendChild(wrap);
     }
 
-    if (type === "bool") {
-      const el = document.createElement("select");
-      el.innerHTML = `
-        <option value="">请选择</option>
-        <option value="true">是</option>
-        <option value="false">否</option>
-      `;
-      if (value === true) el.value = "true";
-      else if (value === false) el.value = "false";
-      else el.value = "";
-      return el;
-    }
+    c.appendChild(box);
+  }
+}
 
-    const el = document.createElement("input");
-    el.type = "text";
+function buildInputForField(field, value){
+  const type = field.type || "text";
+
+  if (type === "textarea"){
+    const el = document.createElement("textarea");
     el.value = value == null ? "" : String(value);
     return el;
   }
 
-  /** =====================================================
-   * SAVE
-   * ===================================================== */
-  async function saveCurrentStage() {
-    if (!currentPreset?.id) throw new Error("未加载 preset");
-    if (Number(currentPreset.enabled) !== 1) throw new Error("该 preset 已淘汰（enabled=0），不可保存");
+  if (type === "enum"){
+    const el = document.createElement("select");
+    const opts = field.options || [];
+    el.innerHTML = [`<option value="">请选择</option>`]
+      .concat(opts.map(o=>`<option value="${escapeHtml(o.value)}">${escapeHtml(o.label||o.value)}</option>`))
+      .join("");
+    el.value = value == null ? "" : String(value);
+    return el;
+  }
 
-    setStatus("ok", "保存中…");
+  // ✅ 多选：multi_enum
+  if (type === "multi_enum"){
+    const wrap = document.createElement("div");
+    wrap.className = "checks";
+    const selected = new Set(Array.isArray(value) ? value : []);
 
-    const fields = getAllFieldsFromSchema(uiSchema);
-    const editableFields = fields.filter(
-      (f) => Array.isArray(f.editable_stages) && f.editable_stages.includes(currentStage)
-    );
+    for (const opt of (field.options || [])){
+      const lab = document.createElement("label");
+      lab.className = "check";
 
-    const merged = { ...(currentPayload || {}) };
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.name = field.key;
+      cb.value = opt.value;
+      cb.checked = selected.has(opt.value);
 
-    for (const f of editableFields) {
-      const key = f.key;
-      const root = $(`fld__${key}`);
-      if (!root) continue;
+      const span = document.createElement("span");
+      span.textContent = opt.label || opt.value;
 
-      let v = null;
+      lab.appendChild(cb);
+      lab.appendChild(span);
+      wrap.appendChild(lab);
+    }
+    return wrap;
+  }
 
-      if ((f.type || "") === "multi_enum") {
-        // root 是 div.checks
-        v = Array.from(root.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(key)}"]`))
-          .filter((x) => x.checked)
-          .map((x) => x.value);
-      } else {
-        v = root.value;
-      }
+  if (type === "bool"){
+    const el = document.createElement("select");
+    el.innerHTML = `
+      <option value="">请选择</option>
+      <option value="true">是</option>
+      <option value="false">否</option>
+    `;
+    if (value === true) el.value = "true";
+    else if (value === false) el.value = "false";
+    else el.value = "";
+    return el;
+  }
 
-      if ((f.type || "") === "bool") {
-        if (v === "true") v = true;
-        else if (v === "false") v = false;
-        else v = null;
-      }
+  const el = document.createElement("input");
+  el.type = "text";
+  el.value = value == null ? "" : String(value);
+  return el;
+}
 
-      if (typeof v === "string") {
-        v = v.trim();
-        if (v === "") v = null;
-      }
+/** ------- save ------- **/
+async function saveCurrentStage(){
+  if (!currentPreset?.id) throw new Error("未加载 preset");
+  if (Number(currentPreset.enabled) !== 1) throw new Error("该 preset 已淘汰（enabled=0），不可保存");
 
-      if (Array.isArray(f.required_stages) && f.required_stages.includes(currentStage)) {
-        if (v == null || v === "" || (Array.isArray(v) && v.length === 0)) {
-          throw new Error(`缺少必填：${f.label || f.key}`);
-        }
-      }
+  setStatus("ok","保存中…");
 
-      merged[key] = v;
+  const fields = getAllFieldsFromSchema(uiSchema);
+  const editableFields = fields.filter(f => Array.isArray(f.editable_stages) && f.editable_stages.includes(currentStage));
+  const merged = { ...(currentPayload || {}) };
+
+  for (const f of editableFields){
+    const key = f.key;
+    const root = $(`fld__${key}`);
+    if (!root) continue;
+
+    let v = null;
+
+    if ((f.type||"") === "multi_enum"){
+      v = Array.from(root.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(key)}"]:checked`))
+        .map(x=>x.value);
+    } else {
+      v = root.value;
     }
 
-    await httpjson(`${apiBase()}/preset/update/${encodeURIComponent(currentPreset.id)}`, {
-      method: "POST",
-      body: JSON.stringify({
-        pack_id: getPackId(),
-        pack_version: getPackVersion(),
-        payload: merged,
-        stage: currentStage,
-      }),
-    });
+    if ((f.type||"") === "bool"){
+      if (v === "true") v = true;
+      else if (v === "false") v = false;
+      else v = null;
+    }
 
-    currentPayload = merged;
+    if (typeof v === "string"){
+      v = v.trim();
+      if (v === "") v = null;
+    }
 
-    await previewPromptToDebug(currentStage, currentPayload).catch(() => {});
-    setStatus("ok", "已保存");
+    if (Array.isArray(f.required_stages) && f.required_stages.includes(currentStage)){
+      if (v == null || v === "" || (Array.isArray(v) && v.length===0)){
+        throw new Error(`缺少必填：${f.label || f.key}`);
+      }
+    }
+
+    merged[key] = v;
   }
 
-  async function previewPromptToDebug(stage, payload) {
-    const pre = $("debugPrompt");
-    if (!pre) return;
+  await httpjson(`${apiBase()}/preset/update/${encodeURIComponent(currentPreset.id)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+      payload: merged,
+      stage: currentStage,
+    }),
+  });
 
-    const out = await httpjson(`${apiBase()}/preview`, {
-      method: "POST",
-      body: JSON.stringify({
-        pack_id: getPackId(),
-        pack_version: getPackVersion(),
-        stage,
-        payload,
-        preset_id: currentPreset.id,
-      }),
-    });
+  currentPayload = merged;
+  await previewPromptToDebug(currentStage, currentPayload).catch(()=>{});
+  setStatus("ok","已保存");
+}
 
-    pre.textContent = out.prompt_text || "保存后将显示生成脚本预览";
-  }
+async function previewPromptToDebug(stage, payload){
+  const pre = $("debugPrompt");
+  if (!pre) return;
+  const out = await httpjson(`${apiBase()}/preview`, {
+    method: "POST",
+    body: JSON.stringify({
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+      stage,
+      payload,
+      preset_id: currentPreset.id,
+    }),
+  });
+  pre.textContent = out.prompt_text || "保存后将显示生成脚本预览";
+}
 
-  /** =====================================================
-   * UI CLEAR
-   * ===================================================== */
-  function clearPresetInfo() {
-    currentPreset = null;
-    currentPayload = {};
-    currentStage = "S0";
+/** ------- ui clear ------- **/
+function clearPresetInfo(){
+  currentPresetId = "";
+  currentPreset = null;
+  currentPayload = {};
+  currentStage = "S0";
+  if ($("presetId")) $("presetId").value = "";
+  if ($("presetStage")) $("presetStage").value = "";
+  if ($("presetEnabled")) $("presetEnabled").value = "";
+  if ($("saveHint")) $("saveHint").textContent = "请选择账号与角色后编辑。";
+}
+function clearForm(){
+  const c = $("formContainer");
+  if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
+  if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 
-    if ($("presetId")) $("presetId").value = "";
-    if ($("presetStage")) $("presetStage").value = "";
-    if ($("presetEnabled")) $("presetEnabled").value = "";
-    if ($("saveHint")) $("saveHint").textContent = "请选择账号与角色后编辑。";
-  }
+}
 
-  function clearForm() {
-    const c = $("formContainer");
-    if (c) c.innerHTML = `<div class="sub">当前阶段暂无可填写表单</div>`;
-    if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
-  }
-})();

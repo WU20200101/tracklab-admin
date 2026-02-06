@@ -3,64 +3,195 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TrackLab 表单平台</title>
-  <link rel="stylesheet" href="../ui.css?v=ui_v1" />
+  <title>TrackLab 角色升级平台</title>
+  <style>
+    :root{
+      --ink:#111827;
+      --muted:#6B7280;
+      --bg:#F6F7F9;
+      --card:#FFFFFF;
+      --line:#E5E7EB;
+      --brand:#1A73E8;
+      --radius:12px;
+    }
+    body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:var(--bg); color:var(--ink); }
+    .wrap{ max-width: 980px; margin: 0px auto; padding: 16px; }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+    h1{ margin:0 0 6px; font-size: 22px; }
+    .sub{ color:var(--muted); font-size: 12px; }
+    .grid3{ display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; }
+    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea{
+      width:100%;
+      box-sizing:border-box;
+      padding: 10px;
+      border:1px solid var(--line);
+      border-radius: 10px;
+      outline:none;
+      background:#fff;
+      color:var(--ink);
+      font-size:14px;
+    }
+    input[readonly]{
+      background:#F3F4F6;
+      color:#374151;
+      cursor:not-allowed;
+    }
+    textarea{ min-height: 120px; resize: vertical; }
+    .row{ display:flex; align-items:center; gap:10px; }
+    .btn{
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn.primary{
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+    /*.sep{ height:1px; background: var(--line); margin: 14px 0; } */
+    .sep{ border-top: 1px dashed #e5e7eb; padding-top:12px; margin-top:12px; }
+    .titlebar{ display:flex; align-items:baseline; justify-content:space-between; gap: 12px; }
+    .status{ font-size: 13px; color: #065f46; }
+    .status.err{ color:#DC2626; }
+    .blocktitle{ font-weight: 800; font-size: 18px; margin:0 0 10px; }
+    .stagehint{ color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .fieldcard{ border:1px dashed var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+    .fieldhead{ display:flex; justify-content:space-between; gap: 10px; margin-bottom: 8px; }
+    .pill{ font-size:12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    pre{
+      margin:0;
+      padding: 12px;
+      border-radius: 12px;
+      background: #e5e7eb;
+      color: #0b1020;
+      border-color:#0b1020;
+      overflow:auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    /* multi_enum 横排 pill（修正：对齐+断行） */
+    .checks{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-top:8px;
+    }
+
+    .checks .check{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      padding:10px 14px;
+      min-height:24px;              /* ✅ 关键：别太扁 */
+      border:1px solid var(--line, #E5E7EB);
+      border-radius:12px;
+      background:#fff;
+      cursor:pointer;
+      user-select:none;
+      margin:0;
+    }
+
+    .checks .check input[type="checkbox"]{
+      width:16px;
+      height:16px;
+      margin:0;
+      flex:0 0 auto;
+    }
+
+    /* ✅ 关键：让文字不要被挤成竖排 */
+    .checks .check span{
+      display:inline-block;
+      line-height:1.15;
+      font-size:13px;
+      color:var(--ink, #111827);
+
+      /* 两种选一： */
+      /* A：不换行（推荐短选项） */
+      white-space:nowrap;
+
+      /* B：如果你选项可能很长，用这两行替代 A */
+      /* max-width: 9em; */
+      /* word-break: break-word; */
+    }
+
+    #formContainer .fieldcard > div[style*="margin-bottom"] > label {
+  display: block;
+  font-size: 14px;      /* 你要的 14px */
+  font-weight: 600;     /* 更“深一层” */
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+  </style>
 </head>
 <body>
-  <div class="ui-wrap">
+  <div class="wrap">
 
-    <div class="ui-card">
-      <h2 class="ui-title">TrackLab 表单平台</h2>
-      <div class="ui-sub">选择账号与角色后，仅当前阶段字段可编辑。</div>
-      <div id="js-schema-hint" class="ui-sub"></div>
-    </div>
-
-    <div class="ui-card">
-      <div class="ui-grid-3">
+    <!-- ① 标题栏（对齐工作台） -->
+    <div class="card">
+      <div class="titlebar">
         <div>
-          <label class="ui-label">接口地址</label>
-          <input id="js-api-base" class="ui-input ui-input--readonly" type="text" readonly />
-        </div>
-        <div>
-          <label class="ui-label">发布平台</label>
-          <select id="js-pack-id" class="ui-select"></select>
-        </div>
-        <div>
-          <label class="ui-label">版本号</label>
-          <select id="js-pack-version" class="ui-select"></select>
-        </div>
-      </div>
-      <div id="js-status" class="ui-status ui-status--info"></div>
-    </div>
-
-    <div class="ui-card">
-      <div class="ui-blocktitle">一、选择账号</div>
-      <div class="ui-grid-2">
-        <div>
-          <label class="ui-label">用户名</label>
-          <select id="js-owner-select" class="ui-select"></select>
-        </div>
-        <div>
-          <label class="ui-label">账号</label>
-          <select id="js-account-select" class="ui-select"></select>
+          <h2 style="margin:0 0 6px 0;">TrackLab 角色升级平台</h2>
+          <div class="sub">声明：本页仅用于角色升级后的表单填写。</div>
         </div>
       </div>
     </div>
 
-    <div class="ui-card">
-      <div class="ui-blocktitle">二、选择角色</div>
-      <div class="ui-grid-3">
+    <!-- ② 接口/平台/版本（对齐工作台） -->
+    <div class="card">
+      <div class="grid3">
         <div>
-          <label class="ui-label">角色范围</label>
-          <select id="js-preset-enabled-filter" class="ui-select">
+          <label>接口地址</label>
+          <input id="apiBase" type="text" readonly />
+        </div>
+        <div>
+          <label>发布平台</label>
+          <select id="packId"></select>
+        </div>
+        <div>
+          <label>版本号</label>
+          <select id="packVersion"></select>
+        </div>
+      </div>
+       <div id="status" class="status" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- ③ 选择账号（对齐工作台） -->
+    <div class="card">
+      <div class="blocktitle">一、选择账号</div>
+      <div class="grid2">
+        <div>
+          <label>用户名</label>
+          <select id="ownerId"></select>
+        </div>
+        <div>
+          <label>账号</label>
+          <select id="accountSelect"></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ④ 选择角色（对齐工作台） -->
+    <div class="card">
+      <div class="blocktitle">二、选择角色</div>
+      <div class="grid3">
+        <div>
+          <label>选择角色范围</label>
+          <select id="onlyEnabled">
             <option value="1" selected>仅有效角色</option>
             <option value="">全部角色（含淘汰）</option>
           </select>
-          <div class="ui-hint">淘汰角色仅用于回看，不可保存。</div>
+          <div class="stagehint">淘汰角色仅用于回看，不参与生成/提交。</div>
         </div>
         <div>
-          <label class="ui-label">按级别筛选</label>
-          <select id="js-stage-filter" class="ui-select">
+          <label>按账号级别查看</label>
+          <select id="stageFilter">
             <option value="">全部级别</option>
             <option value="S0">S0</option>
             <option value="S1">S1</option>
@@ -69,38 +200,67 @@
           </select>
         </div>
         <div>
-          <label class="ui-label">角色</label>
-          <select id="js-preset-select" class="ui-select"></select>
+          <label>角色</label>
+          <select id="presetSelect"></select>
         </div>
       </div>
 
-      <!-- 仍保留只读信息（调试/未来扩展用） -->
-      <div class="ui-sep ui-grid-3">
-        <div><label class="ui-label">preset_id（只读）</label><input id="js-preset-id" class="ui-input ui-input--readonly" readonly /></div>
-        <div><label class="ui-label">stage（只读）</label><input id="js-preset-stage" class="ui-input ui-input--readonly" readonly /></div>
-        <div><label class="ui-label">enabled（只读）</label><input id="js-preset-enabled" class="ui-input ui-input--readonly" readonly /></div>
+      <div class="grid3" style="display:none;">
+        <div>
+          <label>当前 preset_id（只读）</label>
+          <input id="presetId" type="text" readonly />
+        </div>
+        <div>
+          <label>当前 stage（只读）</label>
+          <input id="presetStage" type="text" readonly />
+        </div>
+        <div>
+          <label>enabled（只读）</label>
+          <input id="presetEnabled" type="text" readonly />
+        </div>
       </div>
     </div>
 
-    <div class="ui-card">
-      <div class="ui-blocktitle">三、表单填写</div>
-      <div id="js-save-hint" class="ui-sub">请选择账号与角色后编辑。</div>
+    <!-- ⑤ 表单区 -->
+    <div class="card">
+      <div class="blocktitle">三、表单填写</div>
+      <div class="sub">此处将显示当前及之前所有阶段的表单内容；仅当前阶段可进行填写；后续阶段不进行展示。</div>
+      <div class="sep"></div>
 
-      <div class="ui-sep"></div>
-      <div id="js-form-container"></div>
+      <div id="formContainer"></div>
 
-      <div class="ui-sep ui-row">
-        <button id="js-save-btn" class="ui-btn ui-btn--primary" disabled>更新并保存新表单</button>
+      <div class="row" style="margin-top:12px;">
+        <button id="btnSave" class="btn primary" disabled>更新并保存新表单</button>
       </div>
     </div>
 
-    <div class="ui-card">
-      <div class="ui-blocktitle">脚本预览（不可修改）</div>
-      <pre id="js-debug-prompt" class="ui-pre">-</pre>
+    <!-- ⑥ 调试：预览更新后的 prompt -->
+    <div class="card">
+      <div class="blocktitle">脚本预览（不可修改）</div>
+      <pre id="debugPrompt"></pre>
     </div>
 
   </div>
 
-  <script src="./form.js?v=form_v1"></script>
+  <script src="./form.js?v=20260205_04"></script>
 </body>
+
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
