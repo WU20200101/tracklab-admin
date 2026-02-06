@@ -136,20 +136,29 @@ async function loadOwners(){
   const sel = $("ownerId");
   if (!sel) return;
 
-  // 只保留一个空选项：请选择
   sel.innerHTML = `<option value="">请选择</option>`;
-  sel.value = ""; // 强制默认
+  sel.value = "";
 
-  const out = await httpjson(`${apiBase()}/owner/list`, { method:"GET" });
+  // ✅ 改为从 users 表读取：id 用于关联；display_name 用于显示
+  const out = await httpjson(`${apiBase()}/user/list?enabled=1`, { method:"GET" });
   const items = out.items || [];
 
-  items.forEach(id=>{
+  items.forEach(u=>{
+    const id = String(u.id || "").trim();
+    if (!id) return;
+
+    const label =
+      (u.display_name && String(u.display_name).trim()) ? String(u.display_name).trim()
+      : (u.username && String(u.username).trim()) ? String(u.username).trim()
+      : id;
+
     const opt = document.createElement("option");
-    opt.value = String(id);
-    opt.textContent = String(id);
+    opt.value = id;          // ✅ accounts.owner_id 仍然存 users.id
+    opt.textContent = label; // ✅ 下拉显示 display_name
     sel.appendChild(opt);
   });
 }
+
 
 
 async function handleOwnerChanged(){
@@ -197,7 +206,7 @@ async function refreshAccounts(){
   if (!sel) return;
 
   if (!items.length){
-    sel.innerHTML = `<option value="">请先选择用户名</option>`;
+    sel.innerHTML = `<option value="">该用户暂无账号</option>`;
     sel.value = "";
     currentAccountId = "";
     return;
@@ -563,3 +572,4 @@ function clearForm(){
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 
 }
+
