@@ -57,6 +57,29 @@ function setStatus(type, msg) {
   el.innerHTML = `<div class="${type}">${escapeHtml(msg)}</div>`;
 }
 
+// ---- stable fetch json (GLOBAL) ----
+async function httpjson(url, opt = {}) {
+  const res = await fetch(url, {
+    ...opt,
+    headers: { "content-type": "application/json", ...(opt.headers || {}) },
+  });
+
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; }
+  catch { data = { raw: text }; }
+
+  if (!res.ok) {
+    const msg = (data && (data.error || data.message)) || `${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+// 强制挂全局：避免 module / 作用域 / 顺序问题
+window.httpjson = httpjson;
+
+
 async function httpJson(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -742,6 +765,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
