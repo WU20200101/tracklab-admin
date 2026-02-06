@@ -31,8 +31,6 @@ function lsDel(key) {
   } catch {}
 }
 
-
-
 const $ = (id) => document.getElementById(id);
 const EMPTY_TEXT = "请选择";
 
@@ -183,37 +181,14 @@ async function loadOwners() {
   sel.appendChild(empty);
 
   const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
-const rawItems = out.items || [];
+  const items = out.items || [];
 
-// old: ["owner_id", ...]
-// new: [{id,label}, ...]
-const items = rawItems
-  .map(it => {
-    if (typeof it === "string") return { id: it, label: it };
-    if (it && typeof it === "object") return { id: it.id, label: it.label || it.id };
-    return null;
-  })
-  .filter(Boolean);
-
-items.forEach(it => {
-  const opt = document.createElement("option");
-  opt.value = it.id;
-  opt.textContent = it.label;
-  sel.appendChild(opt);
-});
-
-// 还原上次选择（避免用 saved 这种容易撞名的变量）
-  
-const savedOwnerId = lsGet(LS_OWNER_KEY) || "";
-if (savedOwnerId && items.some(it => it.id === savedOwnerId)) sel.value = savedOwnerId;
-
-
-// 还原上次选择（如果仍存在）
-const saved = lsGet(LS_OWNER_KEY) || "";
-if (saved && items.some(it => (typeof it === "string" ? it === saved : it.id === saved))) {
-  sel.value = saved;
-}
-
+  items.forEach((id) => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    sel.appendChild(opt);
+  });
 
   // 还原上次选择（如果仍存在）
   const saved = lsGet(LS_OWNER_KEY) || "";
@@ -765,9 +740,6 @@ async function boot() {
 }
 
 boot().catch(showError);
-
-
-
 
 
 
