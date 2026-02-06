@@ -183,12 +183,22 @@ async function loadOwners() {
   const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
   const items = out.items || [];
 
-  items.forEach((id) => {
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = id;
-    sel.appendChild(opt);
-  });
+items.forEach((it) => {
+  const id = typeof it === "string" ? it : it.id;
+  const label = typeof it === "string" ? it : (it.label || it.id);
+
+  const opt = document.createElement("option");
+  opt.value = id;
+  opt.textContent = label;
+  sel.appendChild(opt);
+});
+
+// 还原上次选择（如果仍存在）
+const saved = lsGet(LS_OWNER_KEY) || "";
+if (saved && items.some(it => (typeof it === "string" ? it === saved : it.id === saved))) {
+  sel.value = saved;
+}
+
 
   // 还原上次选择（如果仍存在）
   const saved = lsGet(LS_OWNER_KEY) || "";
@@ -740,6 +750,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
