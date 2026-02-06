@@ -4,36 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>TrackLab 工作台</title>
-  <style>
-    :root { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial; }
-    body { margin:0; background:#f6f7f9; color:#111827; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
-    .card { background:#fff; border:1px solid #e5e7eb; border-radius: 12px; padding:14px; margin-bottom:12px; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; }
-    .row > div { flex: 1 1 220px; }
-    label { display:block; font-size:12px; color:#6b7280; margin-bottom:6px; }
-    input, select, textarea, button {
-      width:100%; box-sizing:border-box;
-      border:1px solid #e5e7eb; border-radius:10px;
-      padding:10px; font-size:14px; background:#fff;
-    }
-    textarea { min-height: 120px; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace; }
-    button { cursor:pointer; }
-    button.primary { background:#1A73E8; color:#fff; border-color:#1A73E8; }
-    .muted { color:#6b7280; font-size:12px; }
-    .group { border-top: 1px dashed #e5e7eb; padding-top:12px; margin-top:12px; }
-    pre { white-space:pre-wrap; word-break:break-word; background:#e5e7eb; color:#0b1020; border-color:#0b1020; padding:12px; border-radius:12px; overflow:auto; }
-    .ok { color:#065f46; font-size:13px; }
-    .error { color:#b91c1c; font-size:13px; }
-    .warn { color:#92400e; font-size:13px; }
-    .info { color:#1f2937; font-size:13px; }
-    .readonly { background-color: #f3f4f6; color: #6b7280; cursor: not-allowed; }
-  </style>
+  <link rel="stylesheet" href="/public/ui.css?v=20260206a" />
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h2 style="margin:0 0 6px 0;">TrackLab 工作台</h2>
+      <h2>TrackLab 工作台</h2>
       <div class="muted">声明：本页仅用于内容生成及收集用户反馈。</div>
     </div>
 
@@ -47,9 +23,7 @@
           <label>发布平台</label>
           <select id="packId">
             <option value="xhs" selected>小红书</option>
-            
           </select>
-
         </div>
         <div>
           <label>版本号</label>
@@ -62,7 +36,7 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px 0;">一、选择账号</h3>
+      <h3>一、选择账号</h3>
       <div class="row" style="margin-top:12px;">
         <div>
           <label>请选择用户名</label>
@@ -75,11 +49,10 @@
           </select>
         </div>
       </div>
-
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px 0;">二、选择角色</h3>
+      <h3>二、选择角色</h3>
       <div class="row" style="margin-top:12px;">
         <div>
           <label>选择角色范围</label>
@@ -108,7 +81,7 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px 0;">三、脚本预览与内容生成</h3>
+      <h3>三、脚本预览与内容生成</h3>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button id="btnPreview" class="primary" style="width:auto;padding:10px 14px;">预览脚本</button>
       </div>
@@ -129,7 +102,7 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px 0;">四、账号反馈收集</h3>
+      <h3>四、账号反馈收集</h3>
 
       <div class="row" style="margin-top:12px;">
         <div>
@@ -160,7 +133,7 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px 0;">五、交易记录</h3>
+      <h3>五、交易记录</h3>
 
       <div class="row" style="margin-top:12px;">
         <div>
@@ -205,35 +178,9 @@
         <label>交易记录反馈</label>
         <pre id="outcomeOut">交易记录将在此处展示</pre>
       </div>
-
     </div>
-
   </div>
 
   <script src="./client.js?v=20260204a"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
