@@ -11,25 +11,16 @@ const REMEMBER_LAST = false; // ← 只要是 false，就完全不记忆
 
 function lsGet(key) {
   if (!REMEMBER_LAST) return "";
-  try {
-    return lsGet(key) || "";
-  } catch {
-    return "";
-  }
+  try { return localStorage.getItem(key) || ""; } catch { return ""; }
 }
-
 function lsSet(key, value) {
   if (!REMEMBER_LAST) return;
-  try {
-    lsSet(key, value);
-  } catch {}
+  try { localStorage.setItem(key, String(value)); } catch {}
+}
+function lsDel(key) {
+  try { localStorage.removeItem(key); } catch {}
 }
 
-function lsDel(key) {
-  try {
-    lsDel(key);
-  } catch {}
-}
 
 const $ = (id) => document.getElementById(id);
 const EMPTY_TEXT = "请选择";
@@ -181,17 +172,30 @@ async function loadOwners() {
   sel.appendChild(empty);
 
   const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
-  const items = out.items || [];
+const rawItems = out.items || [];
 
-items.forEach((it) => {
-  const id = typeof it === "string" ? it : it.id;
-  const label = typeof it === "string" ? it : (it.label || it.id);
+// old: ["owner_id", ...]
+// new: [{id,label}, ...]
+const items = rawItems
+  .map(it => {
+    if (typeof it === "string") return { id: it, label: it };
+    if (it && typeof it === "object") return { id: it.id, label: it.label || it.id };
+    return null;
+  })
+  .filter(Boolean);
 
+items.forEach(it => {
   const opt = document.createElement("option");
-  opt.value = id;
-  opt.textContent = label;
+  opt.value = it.id;
+  opt.textContent = it.label;
   sel.appendChild(opt);
 });
+
+// 还原上次选择（避免用 saved 这种容易撞名的变量）
+  
+const savedOwnerId = lsGet(LS_OWNER_KEY) || "";
+if (savedOwnerId && items.some(it => it.id === savedOwnerId)) sel.value = savedOwnerId;
+
 
 // 还原上次选择（如果仍存在）
 const saved = lsGet(LS_OWNER_KEY) || "";
@@ -750,6 +754,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
