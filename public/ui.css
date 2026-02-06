@@ -1,0 +1,222 @@
+/* /public/ui.css — TrackLab UI Base */
+
+:root{
+  --ink:#111827;
+  --muted:#6B7280;
+  --bg:#F6F7F9;
+  --card:#FFFFFF;
+  --line:#E5E7EB;
+  --brand:#1A73E8;
+  --radius:12px;
+
+  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+html,body{ height:100%; }
+body{
+  margin:0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.wrap{
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.card{
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.h2{
+  margin:0 0 6px 0;
+  font-size: 20px;
+}
+
+.sub, .muted{
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.blocktitle{
+  font-weight: 800;
+  font-size: 18px;
+  margin:0 0 10px 0;
+}
+
+/* layout */
+.grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid3{ display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; }
+
+@media (max-width: 860px){
+  .grid3{ grid-template-columns: 1fr; }
+  .grid2{ grid-template-columns: 1fr; }
+}
+
+.row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.row > .grow{ flex: 1 1 280px; }
+
+.sep{
+  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+label{
+  display:block;
+  font-size:12px;
+  color: var(--muted);
+  margin-bottom:6px;
+}
+
+/* controls */
+input, select, textarea, button{
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  font-size:14px;
+  background:#fff;
+  color: var(--ink);
+}
+
+textarea{
+  min-height: 120px;
+  font-family: var(--mono);
+  resize: vertical;
+}
+
+input[readonly], .readonly{
+  background:#F3F4F6;
+  color:#374151;
+  cursor:not-allowed;
+}
+
+/* buttons */
+.btn{
+  width:auto;
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor:pointer;
+  font-weight: 600;
+  background:#fff;
+}
+
+.btn.primary{
+  background: var(--brand);
+  border-color: var(--brand);
+  color:#fff;
+}
+
+.btn:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
+/* status */
+.status{ font-size:13px; color:#065f46; }
+.status.err{ color:#DC2626; }
+.status.warn{ color:#92400e; }
+.status.info{ color:#1f2937; }
+
+/* pre */
+pre{
+  margin:0;
+  padding: 12px;
+  border-radius: 12px;
+  background: #e5e7eb;
+  color: #0b1020;
+  overflow:auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+}
+
+/* form cards (for form.html) */
+.fieldcard{
+  border:1px dashed var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.fieldhead{
+  display:flex;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pill{
+  font-size:12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.stagehint{
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* multi_enum pills */
+.checks{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin-top:8px;
+}
+
+.checks .check{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:10px 14px;
+  min-height:24px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#fff;
+  cursor:pointer;
+  user-select:none;
+  margin:0;
+}
+
+.checks .check input[type="checkbox"]{
+  width:16px;
+  height:16px;
+  margin:0;
+  flex:0 0 auto;
+}
+
+.checks .check span{
+  display:inline-block;
+  line-height:1.15;
+  font-size:13px;
+  color:var(--ink);
+  white-space:nowrap;
+}
+
+/* optional: 让 form 的字段 label 更“深一层” */
+#formContainer .fieldcard label{
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
