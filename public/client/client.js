@@ -170,25 +170,33 @@ function clearAccountsUI() {
   sel.appendChild(empty);
 }
 
-async function loadOwners() {
-  // Owner 下拉来自 D1（/owner/list）
+async function loadOwners(){
   const sel = $("ownerId");
-  sel.innerHTML = "";
+  if (!sel) return;
 
-  const empty = document.createElement("option");
-  empty.value = "";
-  empty.textContent = EMPTY_TEXT;
-  sel.appendChild(empty);
+  sel.innerHTML = `<option value="">请选择</option>`;
+  sel.value = "";
 
-  const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
+  const out = await httpjson(`${apiBase()}/user/list?enabled=1`, { method: "GET" });
   const items = out.items || [];
 
-  items.forEach((id) => {
+  items.forEach(u => {
+    const id = String(u.id || "").trim();
+    if (!id) return;
+
+    const label = (u.display_name && String(u.display_name).trim())
+      ? String(u.display_name).trim()
+      : (u.username && String(u.username).trim())
+        ? String(u.username).trim()
+        : id;
+
     const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = id;
+    opt.value = id;          // ✅ 关联字段：users.id
+    opt.textContent = label; // ✅ 显示字段：display_name（fallback username）
     sel.appendChild(opt);
   });
+}
+
 
   // 还原上次选择（如果仍存在）
   const saved = lsGet(LS_OWNER_KEY) || "";
@@ -740,6 +748,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
