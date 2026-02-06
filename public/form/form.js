@@ -151,7 +151,7 @@ async function loadOwners(){
   opt.value = String(id);
   opt.textContent = String(label);
   sel.appendChild(opt);
-});
+};
 
 
 
@@ -566,4 +566,5 @@ function clearForm(){
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 
 }
+
 
