@@ -11,15 +11,26 @@ const REMEMBER_LAST = false; // ← 只要是 false，就完全不记忆
 
 function lsGet(key) {
   if (!REMEMBER_LAST) return "";
-  try { return localStorage.getItem(key) || ""; } catch { return ""; }
+  try {
+    return lsGet(key) || "";
+  } catch {
+    return "";
+  }
 }
+
 function lsSet(key, value) {
   if (!REMEMBER_LAST) return;
-  try { localStorage.setItem(key, String(value)); } catch {}
+  try {
+    lsSet(key, value);
+  } catch {}
 }
+
 function lsDel(key) {
-  try { localStorage.removeItem(key); } catch {}
+  try {
+    lsDel(key);
+  } catch {}
 }
+
 
 
 const $ = (id) => document.getElementById(id);
@@ -754,6 +765,7 @@ async function boot() {
 }
 
 boot().catch(showError);
+
 
 
 
