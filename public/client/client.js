@@ -183,16 +183,12 @@ async function loadOwners() {
   const out = await httpJson(`${apiBase()}/owner/list`, { method: "GET" });
   const items = out.items || [];
 
-  items.forEach(it=>{
-  const id = (typeof it === "string") ? it : it.id;
-  const label = (typeof it === "string") ? it : (it.label || it.display_name || it.username || it.id);
-
-  const opt = document.createElement("option");
-  opt.value = String(id);
-  opt.textContent = String(label);
-  sel.appendChild(opt);
-});
-
+  items.forEach((id) => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    sel.appendChild(opt);
+  });
 
   // 还原上次选择（如果仍存在）
   const saved = lsGet(LS_OWNER_KEY) || "";
@@ -744,7 +740,6 @@ async function boot() {
 }
 
 boot().catch(showError);
-
 
 
 
