@@ -143,13 +143,16 @@ async function loadOwners(){
   const out = await httpjson(`${apiBase()}/owner/list`, { method:"GET" });
   const items = out.items || [];
 
-  items.forEach(id=>{
-    const opt = document.createElement("option");
-    opt.value = String(id);
-    opt.textContent = String(id);
-    sel.appendChild(opt);
-  });
-}
+  items.forEach(it=>{
+  const id = (typeof it === "string") ? it : it.id;
+  const label = (typeof it === "string") ? it : (it.label || it.display_name || it.username || it.id);
+
+  const opt = document.createElement("option");
+  opt.value = String(id);
+  opt.textContent = String(label);
+  sel.appendChild(opt);
+});
+
 
 
 async function handleOwnerChanged(){
@@ -563,3 +566,4 @@ function clearForm(){
   if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
 
 }
+
