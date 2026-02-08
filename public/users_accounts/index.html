@@ -12,19 +12,19 @@
     <!-- header -->
     <div class="card top">
       <h2>TrackLab 用户与账号创建平台</h2>
-      <p class="sub">声明：本页仅用于创建用户（user）与账号（account）。角色（preset）创建/升级在其它页面进行。</p>
-      <p class="sub" id="schemaHint">就绪</p>
+      <div class="sub">声明：本页仅用于创建用户（user）与账号（account）。角色（preset）创建/升级在其它页面进行。</div>
+      <div id="schemaHint" class="sub" style="margin-top:6px;"></div>
     </div>
 
     <!-- config -->
     <div class="card">
       <div class="grid3">
         <div>
-          <label>接口地址</label>label>
-          <input id="apiBase" class="input" value="https://tracklab-api.wuxiaofei1985.workers.dev" readonly />
+          <label>接口地址</label>
+          <input id="apiBase" type="text" readonly />
         </div>
         <div>
-          <label>发布平台</label>label>
+          <label>发布平台</label>
           <select id="packId" class="select"></select>
         </div>
         <div>
@@ -32,25 +32,25 @@
           <select id="packVersion" class="select"></select>
         </div>
       </div>
-
-      <div id="status" class="status"></div>
+      <div id="status" class="status" style="margin-top:10px;"></div>
     </div>
 
     <!-- 1) create user -->
     <div class="card">
       <div class="blocktitle">一、创建用户（users）<div>
-
-      <div class="grid2">
+        
+      <div class="grid2">      
         <div>
           <label>用户名（username）</label>
           <input id="newUsername" class="input" placeholder="英文/数字/下划线/短横线，例如 alice_01" />
-          <div class="stagehint">规则：2–32 位；仅允许 A–Z a–z 0–9 _ -</div>
         </div>
+        <div class="stagehint">规则：2–32 位；仅允许 A–Z a–z 0–9 _ -</div>
+        
         <div>
           <label>昵称（display_name）</label>
-          <input id="newDisplayName" class="input" placeholder="可中文，例如 Alice / 小王" />
-          <div class="stagehinhint">规则：必填；显示用，不参与唯一性。</div>
+          <div class="stagehint">规则：必填；显示用，不参与唯一性。</div>
         </div>
+          <input id="newDisplayName" class="input" placeholder="可中文，例如 Alice / 小王" />
       </div>
 
       <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
@@ -67,12 +67,12 @@
         <div>
           <label>选择用户</label>
           <select id="userSelect" class="select"></select>
-          <div class="stagehinhint">未选择用户时，本区所有字段不可编辑。</div>
+          <div class="stagehint">未选择用户时，本区所有字段不可编辑。</div>
         </div>
         <div>
           <label>账号标识（handle）</label>
           <input id="accountHandle" class="input" placeholder="例如 alice_xhs_01" />
-          <div class="stagehinhint">建议同一 pack 下唯一；用于你在前端下拉选择账号。</div>
+          <div class="stagehint">建议同一 pack 下唯一；用于你在前端下拉选择账号。</div>
         </div>
       </div>
 
