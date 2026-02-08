@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TrackLab 用户与账号创建平台</title>
+  <title>TrackLab 用户与账号创建</title>
   <link rel="stylesheet" href="/public/ui.css" />
 </head>
 <body>
@@ -11,8 +11,9 @@
 
     <!-- header -->
     <div class="card top">
-      <h2>TrackLab 用户与账号创建平台</h2>
-      <div class="muted">声明：本页仅用于创建用户（user）与账号（account）。角色（preset）创建/升级在其它页面进行。</div>
+      <h1>TrackLab</h1>
+      <h3> 用户与账号创建</h3>
+      <div class="muted">声明：本页仅用于创建用户与账号。</div>
       <div class="muted" id="schemaHint"></div>
     </div>
 
@@ -45,24 +46,24 @@
 
       <div class="row">
         <div>
-          <label>用户名（username）</label>
-          <input id="newUsername" class="input" placeholder="英文/数字/下划线/短横线，例如 alice_01" />
+          <label>用户名</label>
+          <input id="newUsername" class="input" placeholder="英文/数字/下划线/短横线，例如 winston_01" />
         </div>
         <div>
-          <label>昵称（display_name）</label>
-          <input id="newDisplayName" class="input" placeholder="可中文，例如 Alice / 小王" />
+          <label>昵称</label>
+          <input id="newDisplayName" class="input" placeholder="可使用中文昵称" />
         </div>
       </div>
 
       <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
-        <button id="btnCreateUser" class="btn primary">创建用户</button>
+        <button id="btnCreateUser" class="btn primary">创建新用户</button>
         <button id="btnReloadUsers" class="btn primary">刷新用户列表</button>
       </div>
     </div>
 
     <!-- 2) create account -->
     <div class="card">
-      <h3>二、创建账号（accounts）</h3>
+      <h3>二、创建账号</h3>
 
       <div class="row">
         <div>
@@ -70,25 +71,25 @@
           <select id="userSelect" class="select"></select>
         </div>
         <div>
-          <label>账号标识（handle）</label>
-          <input id="accountHandle" class="input" placeholder="例如 alice_xhs_01" />
+          <label>账号名称</label>
+          <input id="accountHandle" class="input" placeholder="建议与实际账号名称保持一致" />
         </div>
       </div>
 
       <div class="row" style="margin-top:12px;">
         <div>
-          <div class="label">pack_id</div>
+          << label>发布平台</label>
           <select id="accountPackId" class="select"></select>
         </div>
         <div>
-          <div class="label">pack_version</div>
+          <div class="label">版本号</div>
           <select id="accountPackVersion" class="select"></select>
         </div>
       </div>
 
       <div style="margin-top:12px;">
-        <label>备注（note，可选）</label>
-        <input id="accountNote" class="input" placeholder="例如 主账号 / 测试号" />
+        <label>备注</label>
+        <input id="accountNote" class="input" placeholder="例如:主账号 / 测试号" />
       </div>
 
       <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
