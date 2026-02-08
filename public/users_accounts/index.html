@@ -18,22 +18,25 @@
 
     <!-- config -->
     <div class="card">
-      <div class="grid3">
+      <div class="row">
         <div>
-          <div class="label">接口地址</div>
+          <label>接口地址</label>
           <input id="apiBase" class="input" value="https://tracklab-api.wuxiaofei1985.workers.dev" readonly />
         </div>
         <div>
-          <div class="label">发布平台</div>
-          <select id="packId" class="select"></select>
+          <label>发布平台</label>
+          <select id="packId" class="select">
+            <option value="xhs" selected>小红书</option>
+          </select>
         </div>
         <div>
-          <div class="label">版本号</div>
-          <select id="packVersion" class="select"></select>
+          <label>版本号</label>
+          <select id="packVersion" class="select">
+            <option value="v1.0.0" selected>v1.0.0</option>
+          </select>
         </div>
       </div>
-
-      <div id="status" class="status"></div>
+      <div id="status" class="status" style="margin-top:10px;"></div>
     </div>
 
     <!-- 1) create user -->
