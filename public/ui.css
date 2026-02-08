@@ -215,3 +215,8 @@ pre{
   color:var(--ink);
   margin:0 0 8px;
 }
+
+.fieldset.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
