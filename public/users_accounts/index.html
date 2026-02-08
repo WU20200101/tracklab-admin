@@ -11,24 +11,24 @@
 
     <!-- header -->
     <div class="card top">
-      <h1>TrackLab 用户与账号创建平台</h1>
+      <h2>TrackLab 用户与账号创建平台</h2>
       <p class="sub">声明：本页仅用于创建用户（user）与账号（account）。角色（preset）创建/升级在其它页面进行。</p>
-      <p class="hint" id="schemaHint">就绪</p>
+      <p class="sub" id="schemaHint">就绪</p>
     </div>
 
     <!-- config -->
     <div class="card">
       <div class="grid3">
         <div>
-          <div class="label">接口地址</div>
+          <label>接口地址</label>label>
           <input id="apiBase" class="input" value="https://tracklab-api.wuxiaofei1985.workers.dev" readonly />
         </div>
         <div>
-          <div class="label">发布平台</div>
+          <label>发布平台</label>label>
           <select id="packId" class="select"></select>
         </div>
         <div>
-          <div class="label">版本号</div>
+          <label>版本号</label>
           <select id="packVersion" class="select"></select>
         </div>
       </div>
@@ -38,62 +38,62 @@
 
     <!-- 1) create user -->
     <div class="card">
-      <h2>一、创建用户（users）</h2>
+      <div class="blocktitle">一、创建用户（users）<div>
 
       <div class="grid2">
         <div>
-          <div class="label">用户名（username）</div>
+          <label>用户名（username）</label>
           <input id="newUsername" class="input" placeholder="英文/数字/下划线/短横线，例如 alice_01" />
-          <div class="hint">规则：2–32 位；仅允许 A–Z a–z 0–9 _ -</div>
+          <div class="stagehint">规则：2–32 位；仅允许 A–Z a–z 0–9 _ -</div>
         </div>
         <div>
-          <div class="label">昵称（display_name）</div>
+          <label>昵称（display_name）</label>
           <input id="newDisplayName" class="input" placeholder="可中文，例如 Alice / 小王" />
-          <div class="hint">规则：必填；显示用，不参与唯一性。</div>
+          <div class="stagehinhint">规则：必填；显示用，不参与唯一性。</div>
         </div>
       </div>
 
       <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
-        <button id="btnCreateUser" class="btn">创建用户</button>
-        <button id="btnReloadUsers" class="btn secondary">刷新用户列表</button>
+        <button id="btnCreateUser" class="btn primary">创建用户</button>
+        <button id="btnReloadUsers" class="btn primary">刷新用户列表</button>
       </div>
     </div>
 
     <!-- 2) create account -->
     <div class="card">
-      <h2>二、创建账号（accounts）</h2>
+      <div class="blocktitle">二、创建账号（accounts）</div>
 
       <div class="grid2">
         <div>
-          <div class="label">选择用户</div>
+          <label>选择用户</label>
           <select id="userSelect" class="select"></select>
-          <div class="hint">未选择用户时，本区所有字段不可编辑。</div>
+          <div class="stagehinhint">未选择用户时，本区所有字段不可编辑。</div>
         </div>
         <div>
-          <div class="label">账号标识（handle）</div>
+          <label>账号标识（handle）</label>
           <input id="accountHandle" class="input" placeholder="例如 alice_xhs_01" />
-          <div class="hint">建议同一 pack 下唯一；用于你在前端下拉选择账号。</div>
+          <div class="stagehinhint">建议同一 pack 下唯一；用于你在前端下拉选择账号。</div>
         </div>
       </div>
 
       <div class="grid2" style="margin-top:12px;">
         <div>
-          <div class="label">pack_id</div>
+          <label>pack_id</label>
           <select id="accountPackId" class="select"></select>
         </div>
         <div>
-          <div class="label">pack_version</div>
+          <label>pack_version</label>
           <select id="accountPackVersion" class="select"></select>
         </div>
       </div>
 
       <div style="margin-top:12px;">
-        <div class="label">备注（note，可选）</div>
+        <label>备注（note，可选）</label>
         <input id="accountNote" class="input" placeholder="例如 主账号 / 测试号" />
       </div>
 
       <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
-        <button id="btnCreateAccount" class="btn">创建账号</button>
+        <button id="btnCreateAccount" class="btn primary">创建账号</button>
         <div class="hint" id="accountHint"></div>
       </div>
     </div>
