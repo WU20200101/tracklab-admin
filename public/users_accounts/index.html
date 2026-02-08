@@ -3,103 +3,137 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TrackLab 用户与账号创建平台</title>
-  <link rel="stylesheet" href="/public/ui.css" />
+  <title>TrackLab 用户与账号创建</title>
+  <link rel="stylesheet" href="./ui.css?v=1.0.0" />
 </head>
+
 <body>
   <div class="wrap">
-
-    <!-- header -->
-    <div class="card top">
-      <h2>TrackLab 用户与账号创建平台</h2>
-      <div class="sub">声明：本页仅用于创建用户（user）与账号（account）。角色（preset）创建/升级在其它页面进行。</div>
-      <div id="schemaHint" class="sub" style="margin-top:6px;"></div>
+    <div class="card header">
+      <h1>TrackLab 用户与账号创建</h1>
+      <div class="muted">
+        声明：本页仅用于建立 users 与 accounts。角色（preset）创建/升级请在「角色创建平台 / 角色升级平台」进行。
+      </div>
+      <div class="muted" id="schemaInfo"></div>
     </div>
 
-    <!-- config -->
     <div class="card">
-      <div class="grid3">
-        <div>
+      <div class="row">
+        <div class="col">
           <label>接口地址</label>
-          <input id="apiBase" type="text" readonly />
+          <input id="apiBase" class="input" value="https://tracklab-api.wuxiaofei1985.workers.dev" />
         </div>
-        <div>
+        <div class="col">
           <label>发布平台</label>
-          <select id="packId" class="select"></select>
+          <select id="platform" class="select">
+            <option value="xhs">小红书</option>
+          </select>
         </div>
-        <div>
+        <div class="col">
           <label>版本号</label>
-          <select id="packVersion" class="select"></select>
+          <select id="version" class="select">
+            <option value="v1.0.0">v1.0.0</option>
+          </select>
         </div>
       </div>
-      <div id="status" class="status" style="margin-top:10px;"></div>
+
+      <div id="status" class="status"></div>
     </div>
 
-    <!-- 1) create user -->
+    <!-- A) Create User -->
     <div class="card">
-      <div class="blocktitle">一、创建用户（users）<div>
-        
-      <div class="grid2">      
-        <div>
-          <label>用户名（username）</label>
-          <input id="newUsername" class="input" placeholder="英文/数字/下划线/短横线，例如 alice_01" />
+      <h2>一、创建用户（users）</h2>
+
+      <div class="row">
+        <div class="col">
+          <label>用户名（username）*</label>
+          <input id="username" class="input" placeholder="英文/数字/下划线/短横线，例如 alice_01" />
+          <div class="muted">规则：仅允许 a-z / A-Z / 0-9 / _ / - ，建议 3–32 长度。</div>
         </div>
-        <div class="stagehint">规则：2–32 位；仅允许 A–Z a–z 0–9 _ -</div>
-        
-        <div>
-          <label>昵称（display_name）</label>
-          <div class="stagehint">规则：必填；显示用，不参与唯一性。</div>
+
+        <div class="col">
+          <label>昵称（display_name）*</label>
+          <input id="displayName" class="input" placeholder="可中文，例如 Alice" />
+          <div class="muted">用于前端显示，不参与唯一性约束。</div>
         </div>
-          <input id="newDisplayName" class="input" placeholder="可中文，例如 Alice / 小王" />
       </div>
 
-      <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
-        <button id="btnCreateUser" class="btn primary">创建用户</button>
-        <button id="btnReloadUsers" class="btn primary">刷新用户列表</button>
+      <div class="row">
+        <button id="btnCreateUser" class="btn">创建用户</button>
+        <button id="btnReloadUsers" class="btn btn-ghost">刷新用户列表</button>
       </div>
     </div>
 
-    <!-- 2) create account -->
+    <!-- B) Create Account -->
     <div class="card">
-      <div class="blocktitle">二、创建账号（accounts）</div>
+      <h2>二、创建账号（accounts）</h2>
 
-      <div class="grid2">
-        <div>
-          <label>选择用户</label>
-          <select id="userSelect" class="select"></select>
-          <div class="stagehint">未选择用户时，本区所有字段不可编辑。</div>
+      <div class="row">
+        <div class="col">
+          <label>选择用户 *</label>
+          <select id="userSelect" class="select">
+            <option value="">请选择</option>
+          </select>
+          <div class="muted">未选择用户时，账号创建区将被锁定。</div>
         </div>
-        <div>
-          <label>账号标识（handle）</label>
-          <input id="accountHandle" class="input" placeholder="例如 alice_xhs_01" />
-          <div class="stagehint">建议同一 pack 下唯一；用于你在前端下拉选择账号。</div>
-        </div>
-      </div>
 
-      <div class="grid2" style="margin-top:12px;">
-        <div>
-          <label>pack_id</label>
-          <select id="accountPackId" class="select"></select>
-        </div>
-        <div>
-          <label>pack_version</label>
-          <select id="accountPackVersion" class="select"></select>
+        <div class="col">
+          <label>已有账号（仅查看）</label>
+          <select id="accountList" class="select" disabled>
+            <option value="">请先选择用户</option>
+          </select>
+          <div class="muted">这里仅展示该用户已有账号（便于避免重复 handle）。</div>
         </div>
       </div>
 
-      <div style="margin-top:12px;">
-        <label>备注（note，可选）</label>
-        <input id="accountNote" class="input" placeholder="例如 主账号 / 测试号" />
-      </div>
+      <div id="accountForm" class="fieldset disabled">
+        <div class="row">
+          <div class="col">
+            <label>pack_id *</label>
+            <select id="packId" class="select">
+              <option value="xhs">xhs</option>
+            </select>
+          </div>
 
-      <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
-        <button id="btnCreateAccount" class="btn primary">创建账号</button>
-        <div class="hint" id="accountHint"></div>
+          <div class="col">
+            <label>pack_version *</label>
+            <select id="packVersion" class="select">
+              <option value="v1.0.0">v1.0.0</option>
+            </select>
+          </div>
+
+          <div class="col">
+            <label>账号标识（handle）*</label>
+            <input id="handle" class="input" placeholder="例如 alice_xhs_01" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col">
+            <label>备注（note）</label>
+            <input id="note" class="input" placeholder="例如 主账号 / 测试号 / 赛道备注等" />
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="btnCreateAccount" class="btn">创建账号</button>
+          <button id="btnReloadAccounts" class="btn btn-ghost">刷新账号列表</button>
+        </div>
       </div>
     </div>
 
+    <div class="card">
+      <h2>三、建议的最小验证</h2>
+      <div class="muted">
+        1）创建一个新 user → 刷新下拉能看到<br/>
+        2）选中该 user → account 区解锁<br/>
+        3）创建 account → account 列表出现新 handle<br/>
+        4）重复同 handle（同 owner_id + pack_id + pack_version）应失败（取决于你 D1 唯一约束）<br/>
+        5）切换 user 后，account 列表应随之刷新<br/>
+      </div>
+    </div>
   </div>
 
-  <script src="./users_accounts.js?v=20260209"></script>
+  <script src="./users_accounts.js?v=1.0.0"></script>
 </body>
 </html>
