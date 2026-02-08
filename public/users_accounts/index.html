@@ -62,22 +62,20 @@
 
     <!-- 2) create account -->
     <div class="card">
-      <h2>二、创建账号（accounts）</h2>
+      <h3>二、创建账号（accounts）</h3>
 
-      <div class="grid2">
+      <div class="row">
         <div>
-          <div class="label">选择用户</div>
+          <label>选择用户</label>
           <select id="userSelect" class="select"></select>
-          <div class="hint">未选择用户时，本区所有字段不可编辑。</div>
         </div>
         <div>
-          <div class="label">账号标识（handle）</div>
+          <label>账号标识（handle）</label>
           <input id="accountHandle" class="input" placeholder="例如 alice_xhs_01" />
-          <div class="hint">建议同一 pack 下唯一；用于你在前端下拉选择账号。</div>
         </div>
       </div>
 
-      <div class="grid2" style="margin-top:12px;">
+      <div class="row" style="margin-top:12px;">
         <div>
           <div class="label">pack_id</div>
           <select id="accountPackId" class="select"></select>
@@ -89,13 +87,13 @@
       </div>
 
       <div style="margin-top:12px;">
-        <div class="label">备注（note，可选）</div>
+        <label>备注（note，可选）</label>
         <input id="accountNote" class="input" placeholder="例如 主账号 / 测试号" />
       </div>
 
       <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
-        <button id="btnCreateAccount" class="btn">创建账号</button>
-        <div class="hint" id="accountHint"></div>
+        <button id="btnCreateAccount" class="btn primary">创建账号</button>
+        <label class="hint" id="accountHint"></label>
       </div>
     </div>
 
