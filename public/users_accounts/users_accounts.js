@@ -1,196 +1,251 @@
-/* TrackLab users + accounts create page */
-const EMPTY_TEXT = "请选择";
+// TrackLab - users + accounts page
+// Depends on ui.css existing classes: wrap/card/row/col/input/select/btn/status/fieldset/disabled etc.
 
-function $(id){ return document.getElementById(id); }
-function on(id, evt, fn){ const el = $(id); if (el) el.addEventListener(evt, fn); }
+function $(id) { return document.getElementById(id); }
 
-function setStatus(type, msg){
+function setStatus(type, msg) {
   const el = $("status");
   if (!el) return;
   el.textContent = msg || "";
   el.className = "status" + (type === "err" ? " err" : "");
 }
 
-async function httpjson(url, opt={}){
+function apiBase() {
+  return String($("apiBase").value || "").replace(/\/+$/, "");
+}
+
+async function apiGet(path) {
+  const url = apiBase() + path;
+  const res = await fetch(url, { method: "GET" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json?.ok === false) {
+    const msg = json?.error || `http_${res.status}`;
+    const detail = json?.detail ? ` | ${json.detail}` : "";
+    throw new Error(msg + detail);
+  }
+  return json;
+}
+
+async function apiPost(path, body) {
+  const url = apiBase() + path;
   const res = await fetch(url, {
-    ...opt,
-    headers: { "content-type":"application/json", ...(opt.headers||{}) }
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body || {}),
   });
-  const text = await res.text();
-  let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { data = { raw:text }; }
-  if (!res.ok){
-    const msg = data?.message || data?.error || `${res.status} ${res.statusText}`;
-    const err = new Error(msg);
-    err.data = data;
-    err.status = res.status;
-    throw err;
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json?.ok === false) {
+    const msg = json?.error || `http_${res.status}`;
+    const detail = json?.detail ? ` | ${json.detail}` : "";
+    throw new Error(msg + detail);
   }
-  return data;
+  return json;
 }
 
-function escapeHtml(s){
-  return String(s ?? "")
-    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+function normalizeUsername(u) {
+  return String(u || "").trim();
 }
 
-function apiBase(){ return ($("apiBase")?.value || "").trim().replace(/\/+$/,""); }
-function getPackId(){ return $("packId")?.value || ""; }
-function getPackVersion(){ return $("packVersion")?.value || ""; }
-
-function setDisabledByUserSelected(disabled){
-  const ids = [
-    "accountHandle","accountPackId","accountPackVersion","accountNote","btnCreateAccount"
-  ];
-  ids.forEach(id=>{
-    const el = $(id);
-    if (!el) return;
-    el.disabled = disabled;
-  });
+function validUsername(u) {
+  // allow a-z A-Z 0-9 _ -
+  if (!u) return false;
+  if (u.length < 3 || u.length > 32) return false;
+  return /^[a-zA-Z0-9_-]+$/.test(u);
 }
 
-function userLabel(u){
-  const dn = (u.display_name || "").trim();
-  const un = (u.username || "").trim();
-  if (dn && un) return `${dn} (${un})`;
-  return dn || un || u.id;
+function setAccountFormEnabled(enabled) {
+  const box = $("accountForm");
+  const list = $("accountList");
+  if (!box) return;
+
+  if (enabled) {
+    box.classList.remove("disabled");
+    [...box.querySelectorAll("input,select,button")].forEach(el => el.disabled = false);
+    if (list) list.disabled = false;
+  } else {
+    box.classList.add("disabled");
+    [...box.querySelectorAll("input,select,button")].forEach(el => el.disabled = true);
+    if (list) list.disabled = true;
+  }
 }
 
-/** ------- state ------- **/
-let users = [];
-
-/** ------- boot ------- **/
-window.addEventListener("DOMContentLoaded", ()=>{
-  // 固定：你现在只有 xhs/v1.0.0，做成下拉但仅一个选项（未来扩展也不破结构）
-  $("packId").innerHTML = `<option value="xhs">小红书</option>`;
-  $("packVersion").innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
-
-  // account pack 同步一份（允许未来在此页选择别的 pack）
-  $("accountPackId").innerHTML = $("packId").innerHTML;
-  $("accountPackVersion").innerHTML = $("packVersion").innerHTML;
-
-  bindEvents();
-  boot().catch(e=>setStatus("err", readableErr(e)));
-});
-
-function bindEvents(){
-  on("btnReloadUsers","click", ()=> loadUsers().catch(e=>setStatus("err", readableErr(e))));
-  on("btnCreateUser","click", ()=> createUser().catch(e=>setStatus("err", readableErr(e))));
-
-  on("userSelect","change", ()=> {
-    const hasUser = !!($("userSelect")?.value || "");
-    setDisabledByUserSelected(!hasUser);
-    $("accountHint").textContent = hasUser ? "" : "请选择用户后再创建账号。";
-  });
-
-  on("btnCreateAccount","click", ()=> createAccount().catch(e=>setStatus("err", readableErr(e))));
-}
-
-async function boot(){
-  $("schemaHint").textContent = `就绪（users/accounts）｜${getPackId()} / ${getPackVersion()}`;
-  await loadUsers();
-  setDisabledByUserSelected(true);
-  $("accountHint").textContent = "请选择用户后再创建账号。";
-  setStatus("ok","就绪");
-}
-
-/** ------- users ------- **/
-async function loadUsers(){
-  setStatus("ok","加载用户列表…");
-  const out = await httpjson(`${apiBase()}/user/list`, { method:"GET" });
-  users = out.items || [];
-
+function setUserOptions(users) {
   const sel = $("userSelect");
-  sel.innerHTML = `<option value="">${EMPTY_TEXT}</option>` +
-    users.map(u=>`<option value="${escapeHtml(u.id)}">${escapeHtml(userLabel(u))}</option>`).join("");
+  sel.innerHTML = "";
+  const opt0 = document.createElement("option");
+  opt0.value = "";
+  opt0.textContent = "请选择";
+  sel.appendChild(opt0);
 
-  sel.value = "";
-  setDisabledByUserSelected(true);
-  setStatus("ok", `用户列表已加载（${users.length}）`);
-}
-
-function validateUsername(username){
-  const s = String(username || "").trim();
-  if (!s) return "请填写用户名";
-  if (!/^[A-Za-z0-9_-]{2,32}$/.test(s)) return "用户名格式不符合规则（2–32 位，仅 A–Z a–z 0–9 _ -）";
-  return "";
-}
-
-async function createUser(){
-  const username = ($("newUsername")?.value || "").trim();
-  const display_name = ($("newDisplayName")?.value || "").trim();
-
-  const err1 = validateUsername(username);
-  if (err1) return setStatus("err", err1);
-  if (!display_name) return setStatus("err", "请填写昵称（display_name）");
-
-  setStatus("ok","创建用户…");
-  const out = await httpjson(`${apiBase()}/user/create`, {
-    method:"POST",
-    body: JSON.stringify({ username, display_name })
+  (users || []).forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u.id; // users.id
+    opt.textContent = u.display_name ? `${u.display_name}` : `${u.username || u.id}`;
+    opt.dataset.username = u.username || "";
+    opt.dataset.displayName = u.display_name || "";
+    sel.appendChild(opt);
   });
+}
 
-  // 成功：刷新用户列表并选中新创建的用户
-  await loadUsers();
-  if (out?.id){
-    $("userSelect").value = String(out.id);
-    $("userSelect").dispatchEvent(new Event("change"));
+function setAccountOptions(accounts) {
+  const sel = $("accountList");
+  sel.innerHTML = "";
+  if (!accounts || accounts.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "（暂无账号）";
+    sel.appendChild(opt);
+    return;
+  }
+  accounts.forEach(a => {
+    const opt = document.createElement("option");
+    opt.value = a.id;
+    const created = a.created_at ? ` (${a.created_at})` : "";
+    opt.textContent = `${a.handle || a.id}${created}`;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadUsers() {
+  const data = await apiGet("/user/list");
+  const users = data?.users || [];
+  setUserOptions(users);
+  return users;
+}
+
+async function loadAccounts(ownerId) {
+  if (!ownerId) {
+    setAccountOptions([]);
+    return [];
+  }
+  const data = await apiGet(`/account/list?owner_id=${encodeURIComponent(ownerId)}`);
+  const accounts = data?.accounts || [];
+  setAccountOptions(accounts);
+  return accounts;
+}
+
+async function onCreateUser() {
+  setStatus("", "创建用户中…");
+  const username = normalizeUsername($("username").value);
+  const display_name = String($("displayName").value || "").trim();
+
+  if (!validUsername(username)) {
+    setStatus("err", "用户名不合法：仅允许英文/数字/_/-，长度 3–32。");
+    return;
+  }
+  if (!display_name) {
+    setStatus("err", "昵称（display_name）不能为空。");
+    return;
   }
 
-  $("newUsername").value = "";
-  $("newDisplayName").value = "";
-  setStatus("ok", `用户创建成功：${display_name}（${username}）`);
+  try {
+    await apiPost("/user/create", { username, display_name });
+    setStatus("", "用户创建成功。刷新用户列表中…");
+    await loadUsers();
+    setStatus("", "用户创建成功。");
+  } catch (e) {
+    setStatus("err", `创建用户失败：${e.message}`);
+  }
 }
 
-/** ------- accounts ------- **/
-async function createAccount(){
-  const owner_id = $("userSelect")?.value || "";
-  if (!owner_id) return setStatus("err","请先选择用户");
+async function onCreateAccount() {
+  const owner_id = $("userSelect").value;
+  if (!owner_id) {
+    setStatus("err", "请先选择用户。");
+    return;
+  }
 
-  const pack_id = $("accountPackId")?.value || "";
-  const pack_version = $("accountPackVersion")?.value || "";
-  const handle = ($("accountHandle")?.value || "").trim();
-  const note = ($("accountNote")?.value || "").trim();
+  const pack_id = $("packId").value;
+  const pack_version = $("packVersion").value;
+  const handle = String($("handle").value || "").trim();
+  const note = String($("note").value || "").trim();
 
-  if (!pack_id) return setStatus("err","pack_id_required");
-  if (!pack_version) return setStatus("err","pack_version_required");
-  if (!handle) return setStatus("err","请填写账号标识（handle）");
+  if (!pack_id || !pack_version) {
+    setStatus("err", "pack_id / pack_version 不能为空。");
+    return;
+  }
+  if (!handle) {
+    setStatus("err", "handle 不能为空。");
+    return;
+  }
 
-  setStatus("ok","创建账号…");
+  setStatus("", "创建账号中…");
+  try {
+    await apiPost("/account/create", {
+      owner_id,
+      pack_id,
+      pack_version,
+      handle,
+      note,
+    });
+    setStatus("", "账号创建成功。刷新账号列表中…");
+    await loadAccounts(owner_id);
+    setStatus("", "账号创建成功。");
+  } catch (e) {
+    setStatus("err", `创建账号失败：${e.message}`);
+  }
+}
 
-  const out = await httpjson(`${apiBase()}/account/create`, {
-    method:"POST",
-    body: JSON.stringify({ owner_id, pack_id, pack_version, handle, note })
+async function boot() {
+  setStatus("", "加载用户列表…");
+  setAccountFormEnabled(false);
+
+  // purely for display
+  const platform = $("platform").value;
+  const version = $("version").value;
+  $("schemaInfo").textContent = `环境：${platform} / ${version}`;
+
+  try {
+    await loadUsers();
+    setStatus("", "就绪");
+  } catch (e) {
+    setStatus("err", `初始化失败：${e.message}`);
+  }
+
+  $("btnCreateUser").addEventListener("click", onCreateUser);
+  $("btnReloadUsers").addEventListener("click", async () => {
+    try {
+      setStatus("", "刷新用户列表…");
+      await loadUsers();
+      setStatus("", "已刷新用户列表。");
+    } catch (e) {
+      setStatus("err", `刷新用户失败：${e.message}`);
+    }
   });
 
-  $("accountHandle").value = "";
-  $("accountNote").value = "";
-  setStatus("ok", `账号创建成功：${handle}（account_id: ${out?.id || ""}）`);
+  $("userSelect").addEventListener("change", async () => {
+    const ownerId = $("userSelect").value;
+    if (!ownerId) {
+      setAccountFormEnabled(false);
+      await loadAccounts("");
+      setStatus("", "就绪");
+      return;
+    }
+    setAccountFormEnabled(true);
+    try {
+      setStatus("", "加载账号列表…");
+      await loadAccounts(ownerId);
+      setStatus("", "就绪");
+    } catch (e) {
+      setStatus("err", `加载账号失败：${e.message}`);
+    }
+  });
+
+  $("btnCreateAccount").addEventListener("click", onCreateAccount);
+  $("btnReloadAccounts").addEventListener("click", async () => {
+    const ownerId = $("userSelect").value;
+    if (!ownerId) {
+      setStatus("err", "请先选择用户。");
+      return;
+    }
+    try {
+      setStatus("", "刷新账号列表…");
+      await loadAccounts(ownerId);
+      setStatus("", "已刷新账号列表。");
+    } catch (e) {
+      setStatus("err", `刷新账号失败：${e.message}`);
+    }
+  });
 }
 
-/** ------- error mapping ------- **/
-function readableErr(e){
-  const data = e?.data || null;
-  const code = data?.error || e?.message || "unknown_error";
-
-  // 优先用后端 message（你在 preset 冲突里已经开始这么做了）
-  if (data?.message) return data.message;
-
-  // 针对 user/account 这页做一层人话翻译
-  const map = {
-    user_exists: "该用户名已存在，请换一个用户名。",
-    username_required: "请填写用户名。",
-    display_name_required: "请填写昵称。",
-    user_create_failed: "创建用户失败。",
-    owner_id_required: "请先选择用户。",
-    pack_id_required: "请先选择 pack_id。",
-    pack_version_required: "请先选择 pack_version。",
-    account_handle_required: "请填写账号标识（handle）。",
-    account_create_failed: "创建账号失败。"
-  };
-
-  // 如果 worker 返回了 detail，就拼上（保留排错信息）
-  const detail = data?.detail ? `（${String(data.detail).slice(0,200)}）` : "";
-  return (map[code] || code) + detail;
-}
+boot();
