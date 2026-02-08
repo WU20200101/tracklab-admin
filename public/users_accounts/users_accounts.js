@@ -1,6 +1,14 @@
 /* TrackLab users + accounts create page */
 const EMPTY_TEXT = "请选择";
 
+function packIdToLabel(packId) {
+  const map = {
+    xhs: "小红书",
+  };
+  return map[packId] || packId;
+}
+
+
 function $(id){ return document.getElementById(id); }
 function on(id, evt, fn){ const el = $(id); if (el) el.addEventListener(evt, fn); }
 
@@ -69,7 +77,7 @@ window.addEventListener("DOMContentLoaded", ()=>{
   syncAccountPackFields();
 
   // ✅ 用 value 同步到灰色输入框（账号区）
-  $("accountPackId").value = getPackId();
+  $("accountPackId").value = packIdToLabel(getPackId());
   $("accountPackVersion").value = getPackVersion();
 
   bindEvents();
