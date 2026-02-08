@@ -66,17 +66,29 @@ window.addEventListener("DOMContentLoaded", ()=>{
   $("packId").innerHTML = `<option value="xhs">小红书</option>`;
   $("packVersion").innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
 
-  // account pack 同步一份（允许未来在此页选择别的 pack）
-  $("accountPackId").innerHTML = $("packId").innerHTML;
-  $("accountPackVersion").innerHTML = $("packVersion").innerHTML;
+  syncAccountPackFields();
+
+  // ✅ 用 value 同步到灰色输入框（账号区）
+  $("accountPackId").value = getPackId();
+  $("accountPackVersion").value = getPackVersion();
 
   bindEvents();
   boot().catch(e=>setStatus("err", readableErr(e)));
 });
 
+function syncAccountPackFields(){
+  const elPid = $("accountPackId");
+  const elPver = $("accountPackVersion");
+  if (elPid) elPid.value = getPackId();
+  if (elPver) elPver.value = getPackVersion();
+}
+
 function bindEvents(){
   on("btnReloadUsers","click", ()=> loadUsers().catch(e=>setStatus("err", readableErr(e))));
   on("btnCreateUser","click", ()=> createUser().catch(e=>setStatus("err", readableErr(e))));
+
+  on("packId","change", syncAccountPackFields);
+  on("packVersion","change", syncAccountPackFields);
 
   on("userSelect","change", ()=> {
     const hasUser = !!($("userSelect")?.value || "");
