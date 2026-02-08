@@ -8,6 +8,14 @@ function packIdToLabel(packId) {
   return map[packId] || packId;
 }
 
+const payload = {
+  owner_id: selectedUserId,
+  pack_id: getPackId(),            // 这里必须来自顶部 select value -> "xhs"
+  pack_version: getPackVersion(),  // "v1.0.0"
+  handle: $("accountHandle").value.trim(),
+  note: $("accountNote").value.trim(),
+};
+
 
 function $(id){ return document.getElementById(id); }
 function on(id, evt, fn){ const el = $(id); if (el) el.addEventListener(evt, fn); }
@@ -76,9 +84,12 @@ window.addEventListener("DOMContentLoaded", ()=>{
 
   syncAccountPackFields();
 
-  // ✅ 用 value 同步到灰色输入框（账号区）
-  $("accountPackId").value = packIdToLabel(getPackId());
-  $("accountPackVersion").value = getPackVersion();
+  const PACK_LABEL = { xhs: "小红书" };
+
+  $("accountPackId").value = PACK_LABEL[getPackId()] || getPackId(); // 显示中文
+  $("accountPackVersion").value = getPackVersion();                  // 版本可直接显示
+
+
 
   bindEvents();
   boot().catch(e=>setStatus("err", readableErr(e)));
