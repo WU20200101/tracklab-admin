@@ -16,6 +16,11 @@
   const LS_ACCOUNT_KEY = "tracklab_account_id";
 
   let currentPreset = null; // preset/get item
+  let __inFlight = {
+  preview: false,
+  generate: false,
+  };
+
 
   /** =====================================================
    * DOM HELPERS
@@ -385,26 +390,32 @@
   }
 
   async function previewPrompt() {
-  const preset_id = getPresetIdStrict();
+  if (__inFlight.preview) return;
+  __inFlight.preview = true;
 
-  // 确保 currentPreset 已加载且匹配当前选择
-  if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-  ensurePresetEnabledForOps();
+  try {
+    const preset_id = getPresetIdStrict();
+    if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+    ensurePresetEnabledForOps();
 
-  const out = await httpJson(`${apiBase()}/preview`, {
-    method: "POST",
-    body: JSON.stringify({
-      pack_id: getPackId(),
-      pack_version: getPackVersion(),
-      preset_id,                      // ✅ 关键：必须带
-      stage: currentPreset.stage,      // ✅ 用 preset 的 stage 作为事实
-      payload: currentPreset.payload,  // ✅ 用 preset 的 payload 作为事实
-    }),
-  });
+    const out = await httpJson(`${apiBase()}/preview`, {
+      method: "POST",
+      body: JSON.stringify({
+        pack_id: getPackId(),
+        pack_version: getPackVersion(),
+        preset_id,
+        stage: currentPreset.stage,
+        payload: currentPreset.payload,
+      }),
+    });
 
-  setPre("previewOut", out?.prompt_text || JSON.stringify(out, null, 2));
-  setStatus("ok", "Preview 成功");
+    setPre("previewOut", out?.prompt_text || JSON.stringify(out, null, 2));
+    setStatus("ok", "Preview 成功");
+  } finally {
+    __inFlight.preview = false;
+  }
 }
+
 
   function pick(obj, keys) {
     for (const k of keys) {
@@ -436,32 +447,43 @@
   }
 
   async function generateContent() {
-  const preset_id = getPresetIdStrict();
+  if (__inFlight.generate) return;
+  __inFlight.generate = true;
 
-  if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-  ensurePresetEnabledForOps();
+  const btn = document.getElementById("btnGenerate"); // 你页面里“生成内容”按钮给它加 id
+  if (btn) btn.disabled = true;
 
-  setStatus("info", "Generate 中…");
-  const out = await httpJson(`${apiBase()}/generate`, {
-    method: "POST",
-    body: JSON.stringify({
-      pack_id: getPackId(),
-      pack_version: getPackVersion(),
-      preset_id,                      // ✅ 保留
-      stage: currentPreset.stage,      // ✅ 建议带上
-      payload: currentPreset.payload,  // ✅ 建议带上
-    }),
-  });
+  try {
+    const preset_id = getPresetIdStrict();
+    if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+    ensurePresetEnabledForOps();
 
-  setPre("genRaw", out);
+    setStatus("info", "Generate 中…");
 
-  // ⚠️ 你现在的 out.output 可能是数组（多条）
-  // 这里先不动渲染格式（你说这个问题后面再解决），保证功能先恢复
-  const outputObj = out?.output || {};
-  setPre("genText", formatClientText(outputObj));
+    const out = await httpJson(`${apiBase()}/generate`, {
+      method: "POST",
+      body: JSON.stringify({
+        pack_id: getPackId(),
+        pack_version: getPackVersion(),
+        preset_id,
+        stage: currentPreset.stage,
+        payload: currentPreset.payload,
+      }),
+    });
 
-  setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
+    setPre("genRaw", out);
+
+    // 先不解决 [object Object]，这里只确保流程通
+    const outputObj = out?.output || out?.output_json || {};
+    setPre("genText", typeof outputObj === "string" ? outputObj : JSON.stringify(outputObj, null, 2));
+
+    setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
+  } finally {
+    __inFlight.generate = false;
+    if (btn) btn.disabled = false;
+  }
 }
+
 
   function readNonNegInt(id) {
     const v = ($(id)?.value ?? "").toString().trim();
@@ -729,4 +751,5 @@
 
   boot().catch(showError);
 })();
+
 
