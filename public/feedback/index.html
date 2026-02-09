@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TrackLab 工作台</title>
+  <link rel="stylesheet" href="/public/ui.css?v=20260206a" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>TrackLab 工作台</h2>
+      <div class="muted">声明：本页仅用于内容生成及收集用户反馈。</div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>接口地址</label>
+          <input id="apiBase" type="text" readonly class="input readonly"/>
+        </div>
+        <div>
+          <label>发布平台</label>
+          <select id="packId">
+            <option value="xhs" selected>小红书</option>
+          </select>
+        </div>
+        <div>
+          <label>版本号</label>
+          <select id="packVersion">
+            <option value="v1.0.0" selected>v1.0.0</option>
+          </select>
+        </div>
+      </div>
+      <div id="status" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <h3>一、选择账号</h3>
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>请选择用户名</label>
+          <select id="ownerId"></select>
+        </div>
+        <div>
+          <label>账号</label>
+          <select id="accountSelect">
+            <option value="">请先选择用户名</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>二、选择角色</h3>
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>选择角色范围</label>
+          <select id="enabledOnly">
+            <option value="1">仅有效角色</option>
+            <option value="">全部角色（含淘汰）</option>
+          </select>
+        </div>
+        <div>
+          <label>按账号级别查看</label>
+          <select id="stageFilter">
+            <option value="">全部级别</option>
+            <option value="S0">0级</option>
+            <option value="S1">1级</option>
+            <option value="S2">2级</option>
+            <option value="S3">3级</option>
+          </select>
+        </div>
+        <div style="flex: 2 1 420px;">
+          <label>角色</label>
+          <select id="presetSelect">
+            <option value="">请先选择用户名</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>三、脚本预览与内容生成</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnPreview" class="primary" style="width:auto;padding:10px 14px;">预览脚本</button>
+      </div>
+
+      <div class="group">
+        <label>脚本预览（不可修改）</label>
+        <pre id="previewOut">脚本生成后，可在此处预览</pre>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;" class="group">
+        <button id="btnGenerate" class="primary" style="width:auto;padding:10px 14px;">生成内容</button>
+      </div>
+
+      <div class="group">
+        <label>内容生成（不可修改）</label>
+        <pre id="genText">内容生成后，将在此处显示</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>四、账号反馈收集</h3>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>日期 (默认当天)</label>
+          <input id="fbDate" type="date" />
+        </div>
+        <div><label>已发布内容篇数（累计）</label><input id="fbPosts" type="number" min="0" step="1" value="0" /></div>
+        <div><label>浏览量（累计）</label><input id="fbViews" type="number" min="0" step="1" value="0" /></div>
+        <div><label>点赞量（累计）</label><input id="fbLikes" type="number" min="0" step="1" value="0" /></div>
+        <div><label>收藏量（累计）</label><input id="fbCollects" type="number" min="0" step="1" value="0" /></div>
+        <div><label>评论量（累计）</label><input id="fbComments" type="number" min="0" step="1" value="0" /></div>
+        <div><label>私信量（累计）</label><input id="fbDmInbound" type="number" min="0" step="1" value="0" /></div>
+      </div>
+
+      <div class="group">
+        <label>备注</label>
+        <input id="fbNote" placeholder="如需备注，可在此处填写。无备注内容时，可留空，不影响反馈提交。" />
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnFeedbackUpsert" class="primary" style="width:auto;padding:10px 14px;">提交反馈并评估</button>
+      </div>
+
+      <div class="group">
+        <label>评估结果</label>
+        <pre id="evalOut">评估结果将在此处展示</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>五、交易记录</h3>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>日期（默认当天）</label>
+          <input id="ocDate" type="date" />
+        </div>
+        <div>
+          <label>统计周期</label>
+          <select id="ocWindow">
+            <option value="daily">每日</option>
+            <option value="weekly">每周</option>
+          </select>
+        </div>
+        <div>
+          <label>是否新增客户</label>
+          <select id="ocLeadCreated"><option value="0">否</option><option value="1">是</option></select>
+        </div>
+        <div>
+          <label>是否新增成交</label>
+          <select id="ocPaid"><option value="0">否</option><option value="1">是</option></select>
+        </div>
+        <div>
+          <label>成交总额</label>
+          <input id="ocAmountYuan" type="number" min="0" step="1" value="0" />
+        </div>
+        <div>
+          <label>新增客户数量</label>
+          <input id="ocLeadsCount" type="number" min="0" step="1" value="0" />
+        </div>
+      </div>
+
+      <div class="group">
+        <label>备注</label>
+        <input id="ocNote" placeholder="例如：微信加了2个；其中1个已付" />
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="btnOutcomeUpsert" class="primary" style="width:auto;padding:10px 14px;">提交交易记录</button>
+      </div>
+
+      <div class="group">
+        <label>交易记录反馈</label>
+        <pre id="outcomeOut">交易记录将在此处展示</pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="./feedback.js?v=20260209"></script>
+</body>
+</html>
