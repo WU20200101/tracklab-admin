@@ -95,11 +95,6 @@
   let uiSchema = null;
   let manifest = null;
 
-  // plugins state (independent of schema)
-  let pluginsIndex = null;
-  let pluginsUI = {};
-  let pluginsState = { banned_words: { enabled: "no" } };
-
   let currentOwnerId = "";
   let currentAccountId = "";
 
@@ -128,7 +123,6 @@
 
   async function boot() {
     await loadPackSchema();
-    await loadPluginsUI();
     await loadOwners();
     await handleOwnerChanged();
     renderFormS0(); // schema 到了就直接渲染 S0
@@ -148,80 +142,6 @@
     }
     setStatus("ok", "Schema 已加载");
   }
-
-// ===== Plugins (read-only UI via Worker; no schema coupling)
-async function loadPluginsUI() {
-  const host = $("pluginsHost");
-  if (!host) return;
-
-  host.innerHTML = `<div class="sub">加载插件…</div>`;
-
-  try {
-    const idx = await httpjson(`${apiBase()}/plugins/index/${getPackId()}/${getPackVersion()}`);
-    pluginsIndex = idx;
-
-    const hasBanned = Array.isArray(idx?.plugins) && idx.plugins.some(p => p.id === "banned_words");
-    if (!hasBanned) {
-      host.innerHTML = `<div class="sub">（无插件）</div>`;
-      return;
-    }
-
-    // fetch UI for banned_words only (minimal)
-    const ui = await httpjson(`${apiBase()}/plugins/ui/${getPackId()}/${getPackVersion()}/banned_words`);
-    pluginsUI.banned_words = ui;
-
-    // init default
-    const def = ui?.fields?.find(f => f.key === "enabled")?.default || "no";
-    pluginsState.banned_words = { enabled: def };
-
-    renderPlugins(host);
-  } catch (e) {
-    host.innerHTML = `<div class="sub" style="color:#b42318;">插件加载失败：${escapeHtml(e.message || String(e))}</div>`;
-  }
-}
-
-function renderPlugins(host) {
-  host.innerHTML = "";
-
-  // banned_words toggle
-  const ui = pluginsUI.banned_words;
-  if (!ui) {
-    host.innerHTML = `<div class="sub">（无插件）</div>`;
-    return;
-  }
-
-  const f = ui.fields.find(x => x.key === "enabled");
-  const wrap = document.createElement("div");
-  wrap.className = "grid2";
-
-  const left = document.createElement("div");
-  const label = document.createElement("label");
-  label.textContent = f?.label || "是否启用禁用词列表";
-  left.appendChild(label);
-
-  const sel = document.createElement("select");
-  for (const opt of (f?.options || [])) {
-    const o = document.createElement("option");
-    o.value = opt.value;
-    o.textContent = opt.label;
-    sel.appendChild(o);
-  }
-  sel.value = pluginsState.banned_words?.enabled || "no";
-  sel.addEventListener("change", () => {
-    pluginsState.banned_words.enabled = sel.value;
-    // 实时刷新预览（如果已创建）不做；创建后 preview 时会读取最新 state
-  });
-
-  left.appendChild(sel);
-
-  const right = document.createElement("div");
-  right.innerHTML = `<div class="sub" style="margin-top:24px;">启用后：生成脚本会插入固定禁用词块；关闭则不出现。</div>`;
-
-  wrap.appendChild(left);
-  wrap.appendChild(right);
-
-  host.appendChild(wrap);
-}
 
   async function loadOwners() {
     const sel = $("ownerId");
@@ -604,7 +524,6 @@ function renderPlugins(host) {
         stage: INIT_STAGE,
         payload,
         preset_id,
-        plugins: pluginsState,
       }),
     });
 
