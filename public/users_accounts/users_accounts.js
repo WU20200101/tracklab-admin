@@ -1,227 +1,366 @@
-/* TrackLab users + accounts create page */
-const EMPTY_TEXT = "请选择";
+/* users_accounts.js (replace whole file) */
 
-function packIdToLabel(packId) {
-  const map = {
-    xhs: "小红书",
-  };
-  return map[packId] || packId;
-}
+// ---- helpers ----
+const $ = (id) => document.getElementById(id);
 
-const payload = {
-  owner_id: selectedUserId,
-  pack_id: getPackId(),            // 这里必须来自顶部 select value -> "xhs"
-  pack_version: getPackVersion(),  // "v1.0.0"
-  handle: $("accountHandle").value.trim(),
-  note: $("accountNote").value.trim(),
-};
-
-
-function $(id){ return document.getElementById(id); }
-function on(id, evt, fn){ const el = $(id); if (el) el.addEventListener(evt, fn); }
-
-function setStatus(type, msg){
+function setStatus(type, msg) {
   const el = $("status");
   if (!el) return;
   el.textContent = msg || "";
   el.className = "status" + (type === "err" ? " err" : "");
 }
 
-async function httpjson(url, opt={}){
+function safeTrim(v) {
+  return (v ?? "").toString().trim();
+}
+
+function isLikelyInternalId(v) {
+  // internal id: xhs / dy / ks / ... (letters/digits/_/-/.)
+  return /^[a-zA-Z0-9_\-\.]+$/.test(v);
+}
+
+function getSelectOption(el) {
+  if (!el) return null;
+  const idx = el.selectedIndex;
+  if (idx < 0) return null;
+  return el.options[idx] || null;
+}
+
+/**
+ * 关键：支持两种写法（保证未来加 pack 不改 JS）
+ * ✅ 推荐：<option value="xhs">小红书</option>  -> value=internal, text=label
+ * ✅ 兼容：<option value="小红书" data-pack-id="xhs">小红书</option> -> text/value是显示，data-pack-id是internal
+ */
+function getSelectedInternalValue(selectEl) {
+  const opt = getSelectOption(selectEl);
+  if (!opt) return "";
+
+  const dataId =
+    opt.dataset.packId ||
+    opt.dataset.pack_id ||
+    opt.getAttribute("data-pack-id") ||
+    opt.getAttribute("data-pack_id") ||
+    "";
+
+  if (dataId) return safeTrim(dataId);
+
+  const v = safeTrim(opt.value);
+  if (isLikelyInternalId(v)) return v;
+
+  // fallback: no data, value not internal ->只能用 value（会导致写入中文）
+  return v;
+}
+
+function getSelectedLabel(selectEl) {
+  const opt = getSelectOption(selectEl);
+  if (!opt) return "";
+  const t = safeTrim(opt.textContent);
+  return t || safeTrim(opt.value);
+}
+
+function apiBase() {
+  return safeTrim($("apiBase")?.value || "").replace(/\/+$/, "");
+}
+
+function getPackId() {
+  return getSelectedInternalValue($("packId"));
+}
+function getPackVersion() {
+  // packVersion 通常 value 就是版本号
+  const el = $("packVersion");
+  return safeTrim(el?.value || "");
+}
+function getPackLabel() {
+  return getSelectedLabel($("packId"));
+}
+function getPackVersionLabel() {
+  return getSelectedLabel($("packVersion"));
+}
+
+// ---- UI sync ----
+function ensurePackOptionsIfEmpty() {
+  const packSel = $("packId");
+  const verSel = $("packVersion");
+  if (packSel && packSel.options.length === 0) {
+    // fallback only: keep internal xhs, show 小红书
+    packSel.innerHTML = `<option value="xhs">小红书</option>`;
+  }
+  if (verSel && verSel.options.length === 0) {
+    verSel.innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
+  }
+}
+
+function syncAccountPackFields() {
+  // account区的 pack/platform/version 只做“显示确认”，不允许选择
+  const packLabel = getPackLabel();
+  const packId = getPackId();
+  const verLabel = getPackVersionLabel();
+  const ver = getPackVersion();
+
+  // accountPackId: 兼容 input 或 select
+  const aPack = $("accountPackId");
+  if (aPack) {
+    if (aPack.tagName === "SELECT") {
+      aPack.innerHTML = `<option value="${packId}">${packLabel}</option>`;
+      aPack.value = packId;
+      aPack.disabled = true;
+    } else {
+      aPack.value = packLabel;
+      aPack.disabled = true;
+    }
+  }
+
+  const aVer = $("accountPackVersion");
+  if (aVer) {
+    if (aVer.tagName === "SELECT") {
+      aVer.innerHTML = `<option value="${ver}">${verLabel}</option>`;
+      aVer.value = ver;
+      aVer.disabled = true;
+    } else {
+      aVer.value = verLabel || ver;
+      aVer.disabled = true;
+    }
+  }
+
+  // 如果你 HTML 里 account区还有 platform 显示框（比如 accountPlatform）
+  const aPlat = $("accountPlatform");
+  if (aPlat) {
+    // 平台显示=pack label（如小红书/抖音），内部仍写 packId
+    if (aPlat.tagName === "SELECT") {
+      aPlat.innerHTML = `<option value="${packId}">${packLabel}</option>`;
+      aPlat.value = packId;
+      aPlat.disabled = true;
+    } else {
+      aPlat.value = packLabel;
+      aPlat.disabled = true;
+    }
+  }
+}
+
+function setAccountFormEnabled(enabled) {
+  const ids = [
+    "accountHandle",
+    "accountNote",
+    "btnCreateAccount",
+    // pack/platform/version 显示项永远禁用，由 syncAccountPackFields 控制
+    "accountPackId",
+    "accountPackVersion",
+    "accountPlatform",
+  ];
+  for (const id of ids) {
+    const el = $(id);
+    if (!el) continue;
+    if (id === "accountPackId" || id === "accountPackVersion" || id === "accountPlatform") {
+      el.disabled = true;
+      continue;
+    }
+    el.disabled = !enabled;
+  }
+
+  const hint = $("accountHint");
+  if (hint) hint.textContent = enabled ? "" : "请选择用户后再创建账号。";
+}
+
+function getSelectedUserId() {
+  const el = $("userSelect");
+  if (!el) return "";
+  const v = safeTrim(el.value);
+  if (!v || v === "0" || v === "请选择") return "";
+  return v;
+}
+
+// ---- API ----
+async function httpJson(url, opts = {}) {
   const res = await fetch(url, {
-    ...opt,
-    headers: { "content-type":"application/json", ...(opt.headers||{}) }
+    ...opts,
+    headers: {
+      "content-type": "application/json",
+      ...(opts.headers || {}),
+    },
   });
   const text = await res.text();
-  let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { data = { raw:text }; }
-  if (!res.ok){
-    const msg = data?.message || data?.error || `${res.status} ${res.statusText}`;
-    const err = new Error(msg);
-    err.data = data;
+  let json;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = { ok: false, error: "invalid_json", raw: text };
+  }
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`);
     err.status = res.status;
+    err.body = json;
     throw err;
   }
-  return data;
+  return json;
 }
 
-function escapeHtml(s){
-  return String(s ?? "")
-    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
-}
+// ---- users ----
+async function refreshUsers() {
+  const base = apiBase();
+  if (!base) throw new Error("missing_api_base");
 
-function apiBase(){ return ($("apiBase")?.value || "").trim().replace(/\/+$/,""); }
-function getPackId(){ return $("packId")?.value || ""; }
-function getPackVersion(){ return $("packVersion")?.value || ""; }
-
-function setDisabledByUserSelected(disabled){
-  const ids = [
-    "accountHandle","accountPackId","accountPackVersion","accountNote","btnCreateAccount"
-  ];
-  ids.forEach(id=>{
-    const el = $(id);
-    if (!el) return;
-    el.disabled = disabled;
-  });
-}
-
-function userLabel(u){
-  const dn = (u.display_name || "").trim();
-  const un = (u.username || "").trim();
-  if (dn && un) return `${dn} (${un})`;
-  return dn || un || u.id;
-}
-
-/** ------- state ------- **/
-let users = [];
-
-/** ------- boot ------- **/
-window.addEventListener("DOMContentLoaded", ()=>{
-  // 固定：你现在只有 xhs/v1.0.0，做成下拉但仅一个选项（未来扩展也不破结构）
-  $("packId").innerHTML = `<option value="xhs">小红书</option>`;
-  $("packVersion").innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
-
-  syncAccountPackFields();
-
-  const PACK_LABEL = { xhs: "小红书" };
-
-  $("accountPackId").value = PACK_LABEL[getPackId()] || getPackId(); // 显示中文
-  $("accountPackVersion").value = getPackVersion();                  // 版本可直接显示
-
-
-
-  bindEvents();
-  boot().catch(e=>setStatus("err", readableErr(e)));
-});
-
-function syncAccountPackFields(){
-  const elPid = $("accountPackId");
-  const elPver = $("accountPackVersion");
-  if (elPid) elPid.value = getPackId();
-  if (elPver) elPver.value = getPackVersion();
-}
-
-function bindEvents(){
-  on("btnReloadUsers","click", ()=> loadUsers().catch(e=>setStatus("err", readableErr(e))));
-  on("btnCreateUser","click", ()=> createUser().catch(e=>setStatus("err", readableErr(e))));
-
-  on("packId","change", syncAccountPackFields);
-  on("packVersion","change", syncAccountPackFields);
-
-  on("userSelect","change", ()=> {
-    const hasUser = !!($("userSelect")?.value || "");
-    setDisabledByUserSelected(!hasUser);
-    $("accountHint").textContent = hasUser ? "" : "请选择用户后再创建账号。";
-  });
-
-  on("btnCreateAccount","click", ()=> createAccount().catch(e=>setStatus("err", readableErr(e))));
-}
-
-async function boot(){
-  $("schemaHint").textContent = `就绪（users/accounts）｜${getPackId()} / ${getPackVersion()}`;
-  await loadUsers();
-  setDisabledByUserSelected(true);
-  $("accountHint").textContent = "请选择用户后再创建账号。";
-  setStatus("ok","就绪");
-}
-
-/** ------- users ------- **/
-async function loadUsers(){
-  setStatus("ok","加载用户列表…");
-  const out = await httpjson(`${apiBase()}/user/list`, { method:"GET" });
-  users = out.items || [];
+  const data = await httpJson(`${base}/users/list`);
+  const items = Array.isArray(data?.items) ? data.items : [];
 
   const sel = $("userSelect");
-  sel.innerHTML = `<option value="">${EMPTY_TEXT}</option>` +
-    users.map(u=>`<option value="${escapeHtml(u.id)}">${escapeHtml(userLabel(u))}</option>`).join("");
-
-  sel.value = "";
-  setDisabledByUserSelected(true);
-  setStatus("ok", `用户列表已加载（${users.length}）`);
-}
-
-function validateUsername(username){
-  const s = String(username || "").trim();
-  if (!s) return "请填写用户名";
-  if (!/^[A-Za-z0-9_-]{2,32}$/.test(s)) return "用户名格式不符合规则（2–32 位，仅 A–Z a–z 0–9 _ -）";
-  return "";
-}
-
-async function createUser(){
-  const username = ($("newUsername")?.value || "").trim();
-  const display_name = ($("newDisplayName")?.value || "").trim();
-
-  const err1 = validateUsername(username);
-  if (err1) return setStatus("err", err1);
-  if (!display_name) return setStatus("err", "请填写昵称（display_name）");
-
-  setStatus("ok","创建用户…");
-  const out = await httpjson(`${apiBase()}/user/create`, {
-    method:"POST",
-    body: JSON.stringify({ username, display_name })
-  });
-
-  // 成功：刷新用户列表并选中新创建的用户
-  await loadUsers();
-  if (out?.id){
-    $("userSelect").value = String(out.id);
-    $("userSelect").dispatchEvent(new Event("change"));
+  if (sel) {
+    sel.innerHTML = `<option value="">请选择</option>` + items
+      .map((u) => {
+        const id = safeTrim(u.id);
+        const dn = safeTrim(u.display_name || u.username || u.id);
+        return `<option value="${id}">${escapeHtml(dn)}</option>`;
+      })
+      .join("");
   }
 
-  $("newUsername").value = "";
-  $("newDisplayName").value = "";
-  setStatus("ok", `用户创建成功：${display_name}（${username}）`);
+  // 可选：显示列表
+  const ul = $("usersList");
+  if (ul) {
+    ul.innerHTML = items
+      .map((u) => {
+        const dn = escapeHtml(safeTrim(u.display_name || ""));
+        const un = escapeHtml(safeTrim(u.username || ""));
+        const id = escapeHtml(safeTrim(u.id || ""));
+        return `<div class="row"><div><b>${dn || un}</b></div><div class="muted">${un} · ${id}</div></div>`;
+      })
+      .join("");
+  }
+
+  // 根据当前选择，启用/禁用 account 表单
+  const uid = getSelectedUserId();
+  setAccountFormEnabled(!!uid);
 }
 
-/** ------- accounts ------- **/
-async function createAccount(){
-  const owner_id = $("userSelect")?.value || "";
-  if (!owner_id) return setStatus("err","请先选择用户");
+async function createUser() {
+  const base = apiBase();
+  if (!base) throw new Error("missing_api_base");
 
-  const pack_id = $("accountPackId")?.value || "";
-  const pack_version = $("accountPackVersion")?.value || "";
-  const handle = ($("accountHandle")?.value || "").trim();
-  const note = ($("accountNote")?.value || "").trim();
+  const username = safeTrim($("newUsername")?.value);
+  const display_name = safeTrim($("newDisplayName")?.value);
 
-  if (!pack_id) return setStatus("err","pack_id_required");
-  if (!pack_version) return setStatus("err","pack_version_required");
-  if (!handle) return setStatus("err","请填写账号标识（handle）");
+  if (!username) {
+    setStatus("err", "用户名不能为空");
+    return;
+  }
 
-  setStatus("ok","创建账号…");
-
-  const out = await httpjson(`${apiBase()}/account/create`, {
-    method:"POST",
-    body: JSON.stringify({ owner_id, pack_id, pack_version, handle, note })
+  await httpJson(`${base}/users/create`, {
+    method: "POST",
+    body: JSON.stringify({ username, display_name }),
   });
 
-  $("accountHandle").value = "";
-  $("accountNote").value = "";
-  setStatus("ok", `账号创建成功：${handle}（account_id: ${out?.id || ""}）`);
+  setStatus("ok", "用户已创建");
+  $("newUsername") && ($("newUsername").value = "");
+  $("newDisplayName") && ($("newDisplayName").value = "");
+  await refreshUsers();
 }
 
-/** ------- error mapping ------- **/
-function readableErr(e){
-  const data = e?.data || null;
-  const code = data?.error || e?.message || "unknown_error";
+// ---- accounts ----
+async function createAccount() {
+  const base = apiBase();
+  if (!base) throw new Error("missing_api_base");
 
-  // 优先用后端 message（你在 preset 冲突里已经开始这么做了）
-  if (data?.message) return data.message;
+  const owner_id = getSelectedUserId();
+  if (!owner_id) {
+    setStatus("err", "请先选择用户");
+    return;
+  }
 
-  // 针对 user/account 这页做一层人话翻译
-  const map = {
-    user_exists: "该用户名已存在，请换一个用户名。",
-    username_required: "请填写用户名。",
-    display_name_required: "请填写昵称。",
-    user_create_failed: "创建用户失败。",
-    owner_id_required: "请先选择用户。",
-    pack_id_required: "请先选择 pack_id。",
-    pack_version_required: "请先选择 pack_version。",
-    account_handle_required: "请填写账号标识（handle）。",
-    account_create_failed: "创建账号失败。"
-  };
+  // 重要：写入 D1 用 internal pack_id（xhs/dy/ks...）
+  const pack_id = getPackId();
+  const pack_version = getPackVersion();
 
-  // 如果 worker 返回了 detail，就拼上（保留排错信息）
-  const detail = data?.detail ? `（${String(data.detail).slice(0,200)}）` : "";
-  return (map[code] || code) + detail;
+  if (!pack_id || !pack_version) {
+    setStatus("err", "pack_id / pack_version 缺失，请检查顶部选择");
+    return;
+  }
+
+  const handle = safeTrim($("accountHandle")?.value);
+  const note = safeTrim($("accountNote")?.value);
+
+  if (!handle) {
+    setStatus("err", "账号名称不能为空");
+    return;
+  }
+
+  await httpJson(`${base}/accounts/create`, {
+    method: "POST",
+    body: JSON.stringify({ owner_id, pack_id, pack_version, handle, note }),
+  });
+
+  setStatus("ok", "账号已创建");
+  $("accountHandle") && ($("accountHandle").value = "");
+  $("accountNote") && ($("accountNote").value = "");
 }
+
+// ---- events ----
+function bindEvents() {
+  $("btnCreateUser")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    createUser().catch((err) => {
+      console.error(err);
+      setStatus("err", readableErr(err));
+    });
+  });
+
+  $("btnRefreshUsers")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    refreshUsers().catch((err) => {
+      console.error(err);
+      setStatus("err", readableErr(err));
+    });
+  });
+
+  $("btnCreateAccount")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    createAccount().catch((err) => {
+      console.error(err);
+      setStatus("err", readableErr(err));
+    });
+  });
+
+  $("userSelect")?.addEventListener("change", () => {
+    const uid = getSelectedUserId();
+    setAccountFormEnabled(!!uid);
+  });
+
+  $("packId")?.addEventListener("change", () => {
+    syncAccountPackFields();
+  });
+  $("packVersion")?.addEventListener("change", () => {
+    syncAccountPackFields();
+  });
+}
+
+// ---- utils ----
+function escapeHtml(s) {
+  return (s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function readableErr(err) {
+  if (!err) return "unknown_error";
+  if (err.body?.error) return err.body.error;
+  if (err.body?.message) return err.body.message;
+  return err.message || String(err);
+}
+
+// ---- boot ----
+async function boot() {
+  ensurePackOptionsIfEmpty();
+  syncAccountPackFields();
+  setAccountFormEnabled(!!getSelectedUserId());
+  await refreshUsers();
+  setStatus("ok", "就绪");
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  bindEvents();
+  boot().catch((err) => {
+    console.error(err);
+    setStatus("err", readableErr(err));
+  });
+});
