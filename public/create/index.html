@@ -11,7 +11,7 @@
 
     <div class="card">
       <h2>TrackLab 角色创建</h2>
-      <div class="sub">声明：本页仅用于创建新角色（preset）并绑定到指定用户与账号。创建后在“角色升级平台”进行更新/升级/淘汰。</div>
+      <div class="sub">声明：本页仅用于创建新角色并绑定到指定用户与账号。创建后在“角色升级平台”进行更新/升级/淘汰。</div>
       <div id="schemaHint content-hide" class="sub" style="margin-top:6px;"></div>
     </div>
 
@@ -52,9 +52,8 @@
       <div class="blocktitle">二、角色基本信息</div>
       <div class="grid2">
         <div>
-          <label>角色名称（preset_name）</label>
-          <input id="presetName" type="text" placeholder="例如：xhs_test_01 / nz_mom_s0_01" />
-          <div class="stagehint">创建后不可用于自动判断成功与否，只是标识。成功判定仍以 jobs 为唯一事实源。</div>
+          <label>角色名称</label>
+          <input id="presetName" type="text" placeholder="可中文，例如：新西兰宝妈" />
         </div>
         <div>
           <label>初始阶段（固定）</label>
@@ -65,7 +64,7 @@
 
     <div class="card">
       <div class="blocktitle">三、填写 S0 表单</div>
-      <div class="sub">仅展示并允许填写：S0 可编辑字段（schema.editable_stages 含 S0）。</div>
+      <div class="sub">创建角色期间，仅允许填写 S0 阶段表单。</div>
       <div class="sep"></div>
 
       <div id="formContainer"></div>
@@ -79,7 +78,7 @@
 
     <div class="card">
       <div class="blocktitle">脚本预览（不可修改）</div>
-      <pre id="debugPrompt">创建后将显示生成脚本预览</pre>
+      <pre id="debugPrompt">角色创建后，将显示脚本预览</pre>
     </div>
 
   </div>
