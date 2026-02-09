@@ -385,22 +385,26 @@
   }
 
   async function previewPrompt() {
-    if (!currentPreset?.id) await presetLoad();
-    ensurePresetEnabledForOps();
+  const preset_id = getPresetIdStrict();
 
-    const out = await httpJson(`${apiBase()}/preview`, {
-      method: "POST",
-      body: JSON.stringify({
-        pack_id: getPackId(),
-        pack_version: getPackVersion(),
-        stage: currentPreset.stage,
-        payload: currentPreset.payload,
-      }),
-    });
+  // 确保 currentPreset 已加载且匹配当前选择
+  if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+  ensurePresetEnabledForOps();
 
-    setPre("previewOut", out?.prompt_text || JSON.stringify(out, null, 2));
-    setStatus("ok", "Preview 成功");
-  }
+  const out = await httpJson(`${apiBase()}/preview`, {
+    method: "POST",
+    body: JSON.stringify({
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+      preset_id,                      // ✅ 关键：必须带
+      stage: currentPreset.stage,      // ✅ 用 preset 的 stage 作为事实
+      payload: currentPreset.payload,  // ✅ 用 preset 的 payload 作为事实
+    }),
+  });
+
+  setPre("previewOut", out?.prompt_text || JSON.stringify(out, null, 2));
+  setStatus("ok", "Preview 成功");
+}
 
   function pick(obj, keys) {
     for (const k of keys) {
@@ -432,27 +436,32 @@
   }
 
   async function generateContent() {
-    const preset_id = getPresetIdStrict();
+  const preset_id = getPresetIdStrict();
 
-    if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-    ensurePresetEnabledForOps();
+  if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+  ensurePresetEnabledForOps();
 
-    setStatus("info", "Generate 中…");
-    const out = await httpJson(`${apiBase()}/generate`, {
-      method: "POST",
-      body: JSON.stringify({
-        pack_id: getPackId(),
-        pack_version: getPackVersion(),
-        preset_id,
-      }),
-    });
+  setStatus("info", "Generate 中…");
+  const out = await httpJson(`${apiBase()}/generate`, {
+    method: "POST",
+    body: JSON.stringify({
+      pack_id: getPackId(),
+      pack_version: getPackVersion(),
+      preset_id,                      // ✅ 保留
+      stage: currentPreset.stage,      // ✅ 建议带上
+      payload: currentPreset.payload,  // ✅ 建议带上
+    }),
+  });
 
-    setPre("genRaw", out);
-    const outputObj = out?.output || {};
-    setPre("genText", formatClientText(outputObj));
+  setPre("genRaw", out);
 
-    setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
-  }
+  // ⚠️ 你现在的 out.output 可能是数组（多条）
+  // 这里先不动渲染格式（你说这个问题后面再解决），保证功能先恢复
+  const outputObj = out?.output || {};
+  setPre("genText", formatClientText(outputObj));
+
+  setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
+}
 
   function readNonNegInt(id) {
     const v = ($(id)?.value ?? "").toString().trim();
@@ -720,3 +729,4 @@
 
   boot().catch(showError);
 })();
+
