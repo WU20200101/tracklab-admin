@@ -3,10 +3,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TrackLab 工作台入口</title>
+  <title>TrackLab 工作平台</title>
   <link rel="stylesheet" href="./ui.css?v=1" />
   <style>
-    /* 入口页轻量补充（不破坏全局 ui.css） */
+    /* 只做最小增量，不改变你现有 ui.css 的整体布局/卡片尺寸 */
+    .center-title{
+      text-align:center;
+      margin:0;
+      font-size:28px;
+      font-weight:800;
+      letter-spacing: .5px;
+    }
+    .center-sub{
+      text-align:center;
+      margin-top:6px;
+      color: var(--muted);
+      font-size:13px;
+    }
     .nav-grid{
       display:grid;
       grid-template-columns: repeat(2, minmax(0,1fr));
@@ -48,204 +61,63 @@
       padding:0 14px;
       border-radius:12px;
       border:1px solid transparent;
-      background: #2563EB;
+      background:#2563EB;
       color:#fff;
       font-weight:700;
       user-select:none;
-    }
-    .nav-card a.btn.secondary{
-      background:#EEF2FF;
-      color:#1E3A8A;
-      border-color:#E0E7FF;
-    }
-    .muted-note{ font-size:12px; color:var(--muted); }
-    .row-3{
-      display:grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap:12px;
-    }
-    @media (max-width: 860px){
-      .row-3{ grid-template-columns: 1fr; }
+      width: 100%;
     }
   </style>
 </head>
+
 <body>
   <div class="page">
     <div class="card top">
-      <h1>TrackLab 工作台入口</h1>
-      <div class="sub">声明：本页仅用于内部工作台导航与参数对齐（接口 / 平台 / 版本）。</div>
-    </div>
-
-    <div class="card">
-      <div class="row-3">
-        <div class="field">
-          <label>接口地址</label>
-          <input id="apiBase" type="text" placeholder="https://xxx.workers.dev" />
-          <div class="muted-note">会保存到本地（localStorage），各页面可复用。</div>
-        </div>
-
-        <div class="field">
-          <label>发布平台</label>
-          <select id="packId">
-            <!-- 这里的 value 永远是 pack_id；显示文本给人看 -->
-            <option value="xhs">小红书</option>
-            <!-- 以后新增 pack，只需要在这里加一行 option（不用改 JS） -->
-            <!-- <option value="dy">抖音</option> -->
-          </select>
-          <div class="muted-note">写入 D1 的仍是 value（pack_id）。</div>
-        </div>
-
-        <div class="field">
-          <label>版本号</label>
-          <select id="packVersion">
-            <option value="v1.0.0">v1.0.0</option>
-            <!-- 以后新增版本，只需要加 option -->
-          </select>
-          <div class="muted-note">用于 schema / pack 选择与过滤。</div>
-        </div>
-      </div>
-
-      <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
-        <button id="btnSave" class="btn">保存并对齐</button>
-        <span id="status" class="muted-note"></span>
-      </div>
+      <h1 class="center-title">TrackLab 工作平台</h1>
+      <div class="center-sub">请选择模块进入（仅入口导航，不承载任何参数设置）。</div>
     </div>
 
     <div class="card">
       <h2 style="margin:0 0 12px 0;">模块入口</h2>
-      <div class="nav-grid" id="navGrid"></div>
+
+      <div class="nav-grid">
+        <div class="nav-card">
+          <h3>用户与账号创建</h3>
+          <p>创建 users / accounts，为后续角色创建提供账号基础。</p>
+          <a class="btn" href="./users_accounts/index.html">进入</a>
+        </div>
+
+        <div class="nav-card">
+          <h3>角色创建</h3>
+          <p>创建角色（preset）并绑定到指定用户与账号。</p>
+          <a class="btn" href="./create/index.html">进入</a>
+        </div>
+
+        <div class="nav-card">
+          <h3>脚本预览</h3>
+          <p>内容脚本生成/预览（用于内容平台发布前检查）。</p>
+          <a class="btn" href="./client/index.html">进入</a>
+        </div>
+
+        <div class="nav-card">
+          <h3>角色升级</h3>
+          <p>加载角色，按阶段填写表单，执行升级/淘汰与更新。</p>
+          <a class="btn" href="./form/index.html">进入</a>
+        </div>
+
+        <div class="nav-card">
+          <h3>平台反馈</h3>
+          <p>收集/查看平台反馈数据（feedback）。</p>
+          <a class="btn" href="./feedback/index.html">进入</a>
+        </div>
+
+        <div class="nav-card">
+          <h3>交易记录</h3>
+          <p>查看/管理 outcomes 与交易结果记录。</p>
+          <a class="btn" href="./outcomes/index.html">进入</a>
+        </div>
+      </div>
     </div>
   </div>
-
-  <script>
-    // -------- storage keys（尽量兼容你现有页面） --------
-    const KEY_API = "tracklab_api_base";
-    const KEY_PACK = "tracklab_pack_id";
-    const KEY_VER  = "tracklab_pack_version";
-
-    const $ = (id)=>document.getElementById(id);
-
-    function setStatus(msg){
-      const el = $("status");
-      if(!el) return;
-      el.textContent = msg || "";
-    }
-
-    function getApiBase(){
-      return ($("apiBase").value || "").trim();
-    }
-    function getPackId(){
-      return $("packId").value;
-    }
-    function getPackVersion(){
-      return $("packVersion").value;
-    }
-
-    function saveSettings(){
-      const api = getApiBase();
-      if(!api){
-        setStatus("请先填写接口地址。");
-        return false;
-      }
-      localStorage.setItem(KEY_API, api);
-      localStorage.setItem(KEY_PACK, getPackId());
-      localStorage.setItem(KEY_VER, getPackVersion());
-      setStatus("已保存。");
-      return true;
-    }
-
-    function loadSettings(){
-      const api = localStorage.getItem(KEY_API) || "";
-      const pack = localStorage.getItem(KEY_PACK) || "xhs";
-      const ver = localStorage.getItem(KEY_VER) || "v1.0.0";
-
-      $("apiBase").value = api || "https://tracklab-api.wuxiaofei1985.workers.dev";
-      if ([...$("packId").options].some(o=>o.value===pack)) $("packId").value = pack;
-      if ([...$("packVersion").options].some(o=>o.value===ver)) $("packVersion").value = ver;
-
-      setStatus(api ? "已加载本地配置。" : "就绪");
-    }
-
-    function buildLink(path){
-      // 统一把参数带给子页面（子页面可读 query / localStorage，谁先谁后都行）
-      const api = encodeURIComponent(getApiBase());
-      const pack = encodeURIComponent(getPackId());
-      const ver  = encodeURIComponent(getPackVersion());
-      return `${path}?api=${api}&pack_id=${pack}&pack_version=${ver}`;
-    }
-
-    function renderNav(){
-      const items = [
-        {
-          title: "TrackLab 用户与账号创建",
-          desc: "创建 users / accounts，并为后续角色创建提供账号基础。",
-          path: "./users_accounts/index.html"
-        },
-        {
-          title: "TrackLab 角色创建",
-          desc: "创建角色（preset）并绑定到指定用户与账号。",
-          path: "./create/index.html"
-        },
-        {
-          title: "TrackLab 脚本预览",
-          desc: "脚本生成/预览（你现有 client 页面）。",
-          path: "./client/index.html"
-        },
-        {
-          title: "TrackLab 角色升级",
-          desc: "加载角色，按阶段填写表单，触发升级/淘汰相关流程。",
-          path: "./form/index.html"
-        },
-        {
-          title: "TrackLab 平台反馈",
-          desc: "收集/查看平台反馈数据（feedback）。",
-          path: "./feedback/index.html"
-        },
-        {
-          title: "TrackLab 交易记录",
-          desc: "查看/管理 outcomes 与交易结果记录。",
-          path: "./outcomes/index.html"
-        }
-      ];
-
-      const grid = $("navGrid");
-      grid.innerHTML = items.map(it => `
-        <div class="nav-card">
-          <h3>${it.title}</h3>
-          <p>${it.desc}</p>
-          <div style="display:flex; gap:10px;">
-            <a class="btn" href="${buildLink(it.path)}" data-path="${it.path}">进入</a>
-            <a class="btn secondary" href="${it.path}" title="不带参数直接打开">直开</a>
-          </div>
-        </div>
-      `).join("");
-
-      // 重新绑定“进入”按钮，点击时先保存配置并刷新 href
-      grid.querySelectorAll('a.btn[data-path]').forEach(a=>{
-        a.addEventListener("click", (e)=>{
-          // 如果没保存成功（缺 api），阻止跳转
-          if(!saveSettings()){
-            e.preventDefault();
-            return;
-          }
-          const p = a.getAttribute("data-path");
-          a.setAttribute("href", buildLink(p));
-        });
-      });
-    }
-
-    // -------- boot --------
-    loadSettings();
-    renderNav();
-
-    $("btnSave").addEventListener("click", ()=>{
-      if(saveSettings()) renderNav();
-    });
-
-    // 如果你在入口页切换平台/版本，希望按钮立刻刷新参数
-    $("packId").addEventListener("change", renderNav);
-    $("packVersion").addEventListener("change", renderNav);
-    $("apiBase").addEventListener("input", ()=>{ /* 不实时 render，避免频繁 */ });
-  </script>
 </body>
 </html>
