@@ -474,8 +474,17 @@
     setPre("genRaw", out);
 
     // 先不解决 [object Object]，这里只确保流程通
-    const outputObj = out?.output || out?.output_json || {};
-    setPre("genText", typeof outputObj === "string" ? outputObj : JSON.stringify(outputObj, null, 2));
+    // 1) 优先用 worker 产出的 output_text（你要的最终展示）
+const text = out.output_text || out.outputText; // 兼容一下字段名
+
+if (typeof text === "string" && text.trim()) {
+  setPre("genText", text);
+} else {
+  // 2) 兜底：没有 output_text 就退回 JSON（便于排错）
+  const outputObj = out.output || out.output_json || {};
+  setPre("genText", typeof outputObj === "string" ? outputObj : JSON.stringify(outputObj, null, 2));
+}
+
 
     setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
   } finally {
@@ -751,5 +760,6 @@
 
   boot().catch(showError);
 })();
+
 
 
