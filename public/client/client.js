@@ -448,8 +448,16 @@
     });
 
     setPre("genRaw", out);
-    const outputObj = out?.output || {};
-    setPre("genText", out?.output_text || formatClientText(outputObj));
+
+// ✅ 优先用 worker 生成的 output_text（人类可读）
+// ✅ 如果没有，就降级显示 output 的 JSON
+// ✅ 再没有，就显示整个 out 的 JSON
+const txt =
+  (typeof out?.output_text === "string" && out.output_text.trim())
+    ? out.output_text
+    : (out?.output ? JSON.stringify(out.output, null, 2) : JSON.stringify(out, null, 2));
+
+setPre("genText", txt);
 
     setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
   }
@@ -720,3 +728,4 @@
 
   boot().catch(showError);
 })();
+
