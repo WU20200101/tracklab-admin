@@ -463,6 +463,17 @@
         input.id = `fld__${key}`;
         setControlDisabled(input, !isEditable);
 
+                // ✅ topic_bank：更新/升级页“可见但不可改”
+        const topicSelectorKey = manifest?.topic?.selector_field; // e.g. "topic_bank"
+        const isTopicSelector = topicSelectorKey && key === topicSelectorKey;
+
+        // 已加载 preset（=更新/升级场景）时，一律锁死 topic_bank
+        if (isTopicSelector && currentPreset?.id) {
+          setControlDisabled(input, true);
+        } else {
+          setControlDisabled(input, !isEditable);
+        }
+
         wrap.appendChild(input);
 
         if (f.help) {
@@ -559,13 +570,23 @@
 
     const fields = getAllFieldsFromSchema(uiSchema);
     const editableFields = fields.filter(
-      (f) => Array.isArray(f.editable_stages) && f.editable_stages.includes(currentStage)
+    (f) => Array.isArray(f.editable_stages) && f.editable_stages.includes(currentStage)
     );
+
+    // ✅ 保存层锁死：topic selector（topic_bank）永不写回
+    const lockedKeys = new Set();
+    const topicSelectorKey = manifest?.topic?.selector_field; // "topic_bank"
+    if (topicSelectorKey) lockedKeys.add(topicSelectorKey);
+
 
     const merged = { ...(currentPayload || {}) };
 
     for (const f of editableFields) {
       const key = f.key;
+      // ✅ 彻底禁止更新 topic_bank
+      if (lockedKeys.has(key) && currentPreset?.id) {
+        continue;
+      }
       const root = $(`fld__${key}`);
       if (!root) continue;
 
@@ -654,3 +675,4 @@
     if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
   }
 })();
+
