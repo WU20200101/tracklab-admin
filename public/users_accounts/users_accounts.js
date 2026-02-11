@@ -2,6 +2,34 @@
 
 const EMPTY_TEXT = "请选择";
 
+// =====================================================
+// API BASE BOOT (config.json / ?api=) —— 与 client.js 一致
+// =====================================================
+let __API_BASE = "";
+
+function ghPagesRepoRootPath(){
+  const parts = location.pathname.split("/").filter(Boolean);
+  if (location.hostname.endsWith("github.io") && parts.length >= 1) return `/${parts[0]}/`;
+  return "/";
+}
+
+async function bootApiBase(){
+  const u = new URL(location.href);
+  const fromQuery = u.searchParams.get("api");
+  if (fromQuery){
+    __API_BASE = fromQuery.trim().replace(/\/+$/, "");
+  } else {
+    const cfgUrl = new URL(`${ghPagesRepoRootPath()}config.json`, location.origin).toString();
+    const resp = await fetch(cfgUrl, { cache: "no-store" });
+    if (!resp.ok) throw new Error("config_json_not_found");
+    const cfg = await resp.json();
+    __API_BASE = String(cfg.api_base || "").trim().replace(/\/+$/, "");
+    if (!__API_BASE) throw new Error("api_base_missing_in_config");
+  }
+  const el = $first("apiBase");
+  if (el) el.value = __API_BASE;
+}
+
 function $id(id){ return document.getElementById(id); }
 function $first(...ids){
   for (const id of ids){
@@ -45,7 +73,7 @@ function escapeHtml(s){
 
 function apiBase(){
   const el = $first("apiBase");
-  return (el?.value || "").trim().replace(/\/+$/,"");
+  return (__API_BASE || el?.value || "").trim().replace(/\/+$/,"");
 }
 
 /** Top selectors (shared across pages) */
@@ -59,6 +87,46 @@ function getPackId(){
 function getPackVersion(){
   const el = packVerEl();
   return (el?.value || "").trim();
+}
+
+async function bootPackSelectors(){
+  const packSel = packIdEl();
+  const verSel = packVerEl();
+  if (!packSel || !verSel) return;
+  const idx = await httpjson(`${apiBase()}/packs/index`);
+  const packs = Array.isArray(idx.packs) ? idx.packs : [];
+  const defPackId = idx.default_pack_id || "";
+  const defVer = idx.default_pack_version || "";
+
+  // pack options
+  const packIds = [...new Set(packs.map(p=>p.pack_id).filter(Boolean))];
+  packSel.innerHTML = "";
+  for (const pid of packIds){
+    const opt = document.createElement("option");
+    opt.value = pid;
+    opt.textContent = pid;
+    packSel.appendChild(opt);
+  }
+
+  function renderVersionsFor(pid){
+    verSel.innerHTML = "";
+    const vers = packs.filter(p=>p.pack_id===pid).map(p=>p.pack_version).filter(Boolean);
+    for (const v of vers){
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v;
+      verSel.appendChild(opt);
+    }
+  }
+
+  if (defPackId && packIds.includes(defPackId)) packSel.value = defPackId;
+  renderVersionsFor(packSel.value || packIds[0] || "");
+  if (defVer) verSel.value = defVer;
+
+  on(packSel, "change", ()=>{
+    renderVersionsFor(packSel.value);
+    syncAccountPackDisplay();
+  });
 }
 function getPackLabel(){
   const el = packIdEl();
@@ -121,12 +189,15 @@ let users = [];
 
 /** ------- boot ------- **/
 window.addEventListener("DOMContentLoaded", ()=>{
-  // 顶部 pack/版本 变化时：同步账号区显示（label）
-  on(packIdEl(), "change", ()=> syncAccountPackDisplay());
-  on(packVerEl(), "change", ()=> syncAccountPackDisplay());
-
-  bindEvents();
-  boot().catch(e=>setStatus("err", readableErr(e)));
+  (async () => {
+    await bootApiBase();
+    await bootPackSelectors();
+    // 顶部 pack/版本 变化时：同步账号区显示（label）
+    on(packIdEl(), "change", ()=> syncAccountPackDisplay());
+    on(packVerEl(), "change", ()=> syncAccountPackDisplay());
+    bindEvents();
+    await boot();
+  })().catch(e=>setStatus("err", readableErr(e)));
 });
 
 function bindEvents(){
