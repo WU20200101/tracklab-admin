@@ -7,78 +7,48 @@
   const $ = (id) => document.getElementById(id);
   const on = (id, evt, fn) => { const el = $(id); if (el) el.addEventListener(evt, fn); };
 
+  // =====================================================
+  // API BASE BOOT (config.json / ?api=)  —— 与 client.js 一致
+  // =====================================================
+  let __API_BASE = "";
+
+  function ghPagesRepoRootPath() {
+    const parts = location.pathname.split("/").filter(Boolean);
+    if (location.hostname.endsWith("github.io") && parts.length >= 1) return `/${parts[0]}/`;
+    return "/";
+  }
+
+  async function bootApiBase() {
+    const u = new URL(location.href);
+    const fromQuery = u.searchParams.get("api");
+    if (fromQuery) {
+      __API_BASE = fromQuery.trim().replace(/\/+$/, "");
+    } else {
+      const cfgUrl = new URL(`${ghPagesRepoRootPath()}config.json`, location.origin).toString();
+      const resp = await fetch(cfgUrl, { cache: "no-store" });
+      if (!resp.ok) throw new Error("config_json_not_found");
+      const cfg = await resp.json();
+      __API_BASE = String(cfg.api_base || "").trim().replace(/\/+$/, "");
+      if (!__API_BASE) throw new Error("api_base_missing_in_config");
+    }
+    const el = $("apiBase");
+    if (el) el.value = __API_BASE; // 仅展示
+  }
+
   function setStatus(type, msg) {
     const el = $("status");
     if (!el) return;
     el.textContent = msg || "";
     el.className = "status" + (type === "err" ? " err" : "");
   }
-  
-  function apiBase() {
-    const u = new URL(location.href);
-    const fromQuery = u.searchParams.get("api");
-    if (fromQuery) return fromQuery.replace(/\/+$/, "");
-    const el = $("apiBase");
-    const v = (el && el.value ? el.value : "").trim().replace(/\/+$/, "");
-    if (!v) throw new Error("api_base_empty");
-    return v;
-  }
 
   function escapeHtml(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-  }
-
-  async function fetchPacksIndex() {
-  return await httpjson(`${apiBase()}/packs/index`, { method: "GET" });
-  }
-  
-  async function bootPackSelectors() {
-  const packSel = $("packId");
-  const verSel  = $("packVersion");
-  if (!packSel || !verSel) return;
-
-  const idx = await fetchPacksIndex();
-
-  const packs = idx.packs || [];
-  const defPackId = idx.default?.pack_id || "";
-  const defVer = idx.default?.pack_version || "";
-
-  packSel.innerHTML =
-    `<option value="">请选择</option>` +
-    packs.map(p => `<option value="${escapeHtml(p.pack_id)}">${escapeHtml(p.label || p.pack_id)}</option>`).join("");
-
-  // 默认选择：完全由 index.json 决定（前端不判断）
-  if (!packSel.value) packSel.value = defPackId;
-
-  function renderVersions() {
-  const curPackId = (packSel.value || "").trim();
-  const p = packs.find(x => x.pack_id === curPackId);
-  const vers = p?.versions || [];
-
-  verSel.innerHTML =
-    `<option value="">请选择</option>` +
-    vers.map(v => `<option value="${escapeHtml(v.pack_version)}">${escapeHtml(v.label || v.pack_version)}</option>`).join("");
-
-  // 版本默认：只按 pack 的 default_pack_version 或全局 default 生效
-  if (!verSel.value) {
-    const pv = p?.default_pack_version || "";
-    if (pv) verSel.value = pv;
-    else if (curPackId === defPackId) verSel.value = defVer;
-    // 否则保持空，让用户选（不做任何 fallback 选择）
-  }
-}
-
-  renderVersions();
-
-  packSel.addEventListener("change", () => {
-    verSel.value = "";
-    renderVersions();
-  });
+    return String(s ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
   }
 
   async function httpjson(url, opt = {}) {
@@ -99,8 +69,12 @@
     return data;
   }
 
+  function apiBase() {
+    const v = (__API_BASE || $("apiBase")?.value || "").trim().replace(/\/+$/, "");
+    if (!v) throw new Error("api_base_empty");
+    return v;
+  }
   function getPackId() { return $("packId")?.value || ""; }
-  
   function getPackVersion() {
     const v = ($("packVersion")?.value || "").trim();
     if (!v) throw new Error("pack_version_required");
@@ -154,14 +128,61 @@
 
   const INIT_STAGE = "S0";
 
-  window.addEventListener("DOMContentLoaded", async () => {
-    try {
-      await bootPackSelectors();   // 先加载 packs/index 填下拉
-      bindEvents();
-      await boot();                // boot 本身是 async，直接 await
-    } catch (e) {
-      setStatus("err", e.message || String(e));
+  async function bootPackSelectors() {
+    const packSel = $("packId");
+    const verSel = $("packVersion");
+    if (!packSel || !verSel) return;
+
+    const idx = await httpjson(`${apiBase()}/packs/index`, { method: "GET" });
+    const packs = Array.isArray(idx?.packs) ? idx.packs : [];
+    const defPackId = idx?.default?.pack_id || "";
+    const defVer = idx?.default?.pack_version || "";
+
+    packSel.innerHTML = "";
+    const p0 = document.createElement("option");
+    p0.value = "";
+    p0.textContent = "请选择";
+    packSel.appendChild(p0);
+    packs.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = String(p.pack_id || "").trim();
+      opt.textContent = String(p.label || p.pack_id || "").trim();
+      packSel.appendChild(opt);
+    });
+
+    function renderVersionsFor(packId) {
+      verSel.innerHTML = "";
+      const v0 = document.createElement("option");
+      v0.value = "";
+      v0.textContent = "请选择";
+      verSel.appendChild(v0);
+      const p = packs.find((x) => String(x.pack_id || "") === String(packId || ""));
+      const vers = Array.isArray(p?.versions) ? p.versions : [];
+      vers.forEach((v) => {
+        const opt = document.createElement("option");
+        opt.value = String(v.pack_version || "").trim();
+        opt.textContent = String(v.label || v.pack_version || "").trim();
+        verSel.appendChild(opt);
+      });
     }
+
+    if (defPackId) packSel.value = defPackId;
+    renderVersionsFor(packSel.value);
+    if (defVer) verSel.value = defVer;
+
+    packSel.addEventListener("change", () => {
+      renderVersionsFor(packSel.value);
+      setStatus("info", "pack 已切换：请重新选择用户名/账号后再创建 preset");
+    });
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    (async () => {
+      await bootApiBase();
+      await bootPackSelectors();
+      bindEvents();
+      await boot();
+    })().catch((e) => setStatus("err", e.message));
   });
 
   function bindEvents() {
