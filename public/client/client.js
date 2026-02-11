@@ -3,6 +3,10 @@
  * - 修复 localStorage helper 的递归 bug
  * - 去重 httpjson/httpJson：保留一个 httpJson
  * - 保持原有业务逻辑：owner -> accounts -> presets，preview/generate/feedback/outcome/stats 不改
+ *
+ * [2026-02-11 PATCH]
+ * - GitHub Pages: apiBase 来自 ./config.json（或 ?api= 覆盖），不再前端写死
+ * - pack/version 下拉来自 /packs/index（不再写死 xhs / v1.0.0）
  */
 
 (() => {
@@ -17,10 +21,12 @@
 
   let currentPreset = null; // preset/get item
   let __inFlight = {
-  preview: false,
-  generate: false,
+    preview: false,
+    generate: false,
   };
 
+  // api base cache (from config.json or ?api=)
+  let __API_BASE = "";
 
   /** =====================================================
    * DOM HELPERS
@@ -110,14 +116,39 @@
   window.httpjson = httpJson;
 
   /** =====================================================
-   * GETTERS
+   * API BASE (GitHub Pages config.json)
    * ===================================================== */
   function apiBase() {
-    const v = ($("apiBase")?.value || "").trim().replace(/\/+$/, "");
-    if (!v) throw new Error("接口地址不能为空");
-    return v;
+    const u = new URL(location.href);
+    const fromQuery = u.searchParams.get("api");
+    if (fromQuery) return fromQuery.replace(/\/+$/, "");
+
+    if (__API_BASE) return __API_BASE.replace(/\/+$/, "");
+
+    throw new Error("api_base_not_ready");
   }
 
+  async function bootApiBase() {
+    const u = new URL(location.href);
+    const fromQuery = u.searchParams.get("api");
+    if (fromQuery) {
+      __API_BASE = fromQuery.replace(/\/+$/, "");
+    } else {
+      const resp = await fetch("./config.json", { cache: "no-store" });
+      if (!resp.ok) throw new Error("config_json_not_found");
+      const cfg = await resp.json();
+      __API_BASE = String(cfg.api_base || "").trim().replace(/\/+$/, "");
+      if (!__API_BASE) throw new Error("api_base_missing_in_config");
+    }
+
+    // 仅用于展示/调试，不参与逻辑判断
+    const el = $("apiBase");
+    if (el) el.value = __API_BASE;
+  }
+
+  /** =====================================================
+   * PACK SELECTORS (from /packs/index)
+   * ===================================================== */
   function getPackId() {
     return $("packId")?.value || "";
   }
@@ -130,6 +161,61 @@
     return v;
   }
 
+  async function bootPackSelectors() {
+    const packSel = $("packId");
+    const verSel = $("packVer") || $("packVersion");
+    if (!packSel || !verSel) return; // 这个页面没有 pack/version 下拉就跳过
+
+    // 拉 packs/index
+    const idx = await httpJson(`${apiBase()}/packs/index`, { method: "GET" });
+
+    const packs = idx.packs || [];
+    const defPackId = idx?.default?.pack_id || "";
+    const defVer = idx?.default?.pack_version || "";
+
+    // 填 pack 下拉
+    packSel.innerHTML =
+      `<option value="">${EMPTY_TEXT}</option>` +
+      packs
+        .map((p) => {
+          const id = String(p.pack_id || "");
+          const label = String(p.label || p.pack_id || "");
+          return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+        })
+        .join("");
+
+    if (!packSel.value && defPackId) packSel.value = defPackId;
+
+    function renderVersions() {
+      const curPackId = (packSel.value || "").trim();
+      const p = packs.find((x) => x.pack_id === curPackId);
+      const vers = p?.versions || [];
+
+      verSel.innerHTML =
+        `<option value="">${EMPTY_TEXT}</option>` +
+        vers
+          .map((v) => {
+            const pv = String(v.pack_version || "");
+            const label = String(v.label || v.pack_version || "");
+            return `<option value="${escapeHtml(pv)}">${escapeHtml(label)}</option>`;
+          })
+          .join("");
+
+      // 默认版本只允许来自：pack.default_pack_version 或 idx.default（不做 vers[0] fallback）
+      if (!verSel.value) {
+        const pv = (p && p.default_pack_version) ? String(p.default_pack_version) : "";
+        if (pv) verSel.value = pv;
+        else if (curPackId && curPackId === defPackId && defVer) verSel.value = defVer;
+      }
+    }
+
+    renderVersions();
+    packSel.addEventListener("change", () => renderVersions());
+  }
+
+  /** =====================================================
+   * GETTERS (STRICT)
+   * ===================================================== */
   function getOwnerIdStrict() {
     const v = ($("ownerId")?.value || "").trim();
     if (!v) throw new Error("用户名为空：先选择用户名");
@@ -390,32 +476,31 @@
   }
 
   async function previewPrompt() {
-  if (__inFlight.preview) return;
-  __inFlight.preview = true;
+    if (__inFlight.preview) return;
+    __inFlight.preview = true;
 
-  try {
-    const preset_id = getPresetIdStrict();
-    if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-    ensurePresetEnabledForOps();
+    try {
+      const preset_id = getPresetIdStrict();
+      if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+      ensurePresetEnabledForOps();
 
-    const out = await httpJson(`${apiBase()}/preview`, {
-      method: "POST",
-      body: JSON.stringify({
-        pack_id: getPackId(),
-        pack_version: getPackVersion(),
-        preset_id,
-        stage: currentPreset.stage,
-        payload: currentPreset.payload,
-      }),
-    });
+      const out = await httpJson(`${apiBase()}/preview`, {
+        method: "POST",
+        body: JSON.stringify({
+          pack_id: getPackId(),
+          pack_version: getPackVersion(),
+          preset_id,
+          stage: currentPreset.stage,
+          payload: currentPreset.payload,
+        }),
+      });
 
-    setPre("previewOut", out?.prompt_text || JSON.stringify(out, null, 2));
-    setStatus("ok", "Preview 成功");
-  } finally {
-    __inFlight.preview = false;
+      setPre("previewOut", out?.prompt_text || JSON.stringify(out, null, 2));
+      setStatus("ok", "Preview 成功");
+    } finally {
+      __inFlight.preview = false;
+    }
   }
-}
-
 
   function pick(obj, keys) {
     for (const k of keys) {
@@ -447,52 +532,46 @@
   }
 
   async function generateContent() {
-  if (__inFlight.generate) return;
-  __inFlight.generate = true;
+    if (__inFlight.generate) return;
+    __inFlight.generate = true;
 
-  const btn = document.getElementById("btnGenerate"); // 你页面里“生成内容”按钮给它加 id
-  if (btn) btn.disabled = true;
+    const btn = document.getElementById("btnGenerate");
+    if (btn) btn.disabled = true;
 
-  try {
-    const preset_id = getPresetIdStrict();
-    if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-    ensurePresetEnabledForOps();
+    try {
+      const preset_id = getPresetIdStrict();
+      if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+      ensurePresetEnabledForOps();
 
-    setStatus("info", "Generate 中…");
+      setStatus("info", "Generate 中…");
 
-    const out = await httpJson(`${apiBase()}/generate`, {
-      method: "POST",
-      body: JSON.stringify({
-        pack_id: getPackId(),
-        pack_version: getPackVersion(),
-        preset_id,
-        stage: currentPreset.stage,
-        payload: currentPreset.payload,
-      }),
-    });
+      const out = await httpJson(`${apiBase()}/generate`, {
+        method: "POST",
+        body: JSON.stringify({
+          pack_id: getPackId(),
+          pack_version: getPackVersion(),
+          preset_id,
+          stage: currentPreset.stage,
+          payload: currentPreset.payload,
+        }),
+      });
 
-    setPre("genRaw", out);
+      setPre("genRaw", out);
 
-    // 先不解决 [object Object]，这里只确保流程通
-    // 1) 优先用 worker 产出的 output_text（你要的最终展示）
-const text = out.output_text || out.outputText; // 兼容一下字段名
+      const text = out.output_text || out.outputText;
+      if (typeof text === "string" && text.trim()) {
+        setPre("genText", text);
+      } else {
+        const outputObj = out.output || out.output_json || {};
+        setPre("genText", typeof outputObj === "string" ? outputObj : JSON.stringify(outputObj, null, 2));
+      }
 
-if (typeof text === "string" && text.trim()) {
-  setPre("genText", text);
-} else {
-  // 2) 兜底：没有 output_text 就退回 JSON（便于排错）
-  const outputObj = out.output || out.output_json || {};
-  setPre("genText", typeof outputObj === "string" ? outputObj : JSON.stringify(outputObj, null, 2));
-}
-
-
-    setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
-  } finally {
-    __inFlight.generate = false;
-    if (btn) btn.disabled = false;
+      setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
+    } finally {
+      __inFlight.generate = false;
+      if (btn) btn.disabled = false;
+    }
   }
-}
-
 
   function readNonNegInt(id) {
     const v = ($(id)?.value ?? "").toString().trim();
@@ -702,18 +781,8 @@ if (typeof text === "string" && text.trim()) {
    * INIT
    * ===================================================== */
   function setDefaults() {
-    const setVal = (id, val) => {
-      const el = $(id);
-      if (el) el.value = val;
-    };
-
-    setVal("apiBase", "https://tracklab-api.wuxiaofei1985.workers.dev");
-    setVal("packId", "xhs");
-
-    if ($("packVer")) setVal("packVer", "v1.0.0");
-    if ($("packVersion")) setVal("packVersion", "v1.0.0");
-
-    setVal("enabledOnly", "1");
+    // 注意：不再写死 apiBase / packId / version（封版要求）
+    if ($("enabledOnly")) $("enabledOnly").value = "1";
 
     if ($("fbDate")) ensureDateDefault("fbDate");
     if ($("ocDate")) ensureDateDefault("ocDate");
@@ -744,6 +813,13 @@ if (typeof text === "string" && text.trim()) {
 
   async function boot() {
     setDefaults();
+
+    setStatus("info", "初始化 apiBase 中…");
+    await bootApiBase();
+
+    setStatus("info", "加载 packs/index 中…");
+    await bootPackSelectors();
+
     bindEvents();
 
     setStatus("info", "初始化 owners 中…");
@@ -758,8 +834,7 @@ if (typeof text === "string" && text.trim()) {
     setStatus("ok", "就绪");
   }
 
-  boot().catch(showError);
+  window.addEventListener("DOMContentLoaded", () => {
+    boot().catch(showError);
+  });
 })();
-
-
-
