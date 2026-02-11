@@ -134,7 +134,7 @@
     if (fromQuery) {
       __API_BASE = fromQuery.replace(/\/+$/, "");
     } else {
-      const resp = await fetch("./public/config.json", { cache: "no-store" });
+      const resp = await fetch("./config.json", { cache: "no-store" });
       if (!resp.ok) throw new Error("config_json_not_found");
       const cfg = await resp.json();
       __API_BASE = String(cfg.api_base || "").trim().replace(/\/+$/, "");
@@ -838,5 +838,6 @@
     boot().catch(showError);
   });
 })();
+
 
 
