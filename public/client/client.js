@@ -134,7 +134,20 @@
     if (fromQuery) {
       __API_BASE = fromQuery.replace(/\/+$/, "");
     } else {
-      const resp = await fetch("./public/config.json", { cache: "no-store" });
+      
+      function ghPagesRepoRootPath() {
+        const parts = location.pathname.split("/").filter(Boolean);
+        // GitHub Pages project site: https://<user>.github.io/<repo>/...
+        if (location.hostname.endsWith("github.io") && parts.length >= 1) {
+          return `/${parts[0]}/`;
+        }
+        // non-github pages: same-origin root
+        return "/";
+      }
+
+      const cfgUrl = new URL(`${ghPagesRepoRootPath()}config.json`, location.origin).toString();
+      const resp = await fetch(cfgUrl, { cache: "no-store" });
+
       if (!resp.ok) throw new Error("config_json_not_found");
       const cfg = await resp.json();
       __API_BASE = String(cfg.api_base || "").trim().replace(/\/+$/, "");
@@ -838,6 +851,7 @@
     boot().catch(showError);
   });
 })();
+
 
 
 
