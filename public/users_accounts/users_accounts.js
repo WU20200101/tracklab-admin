@@ -91,42 +91,64 @@ function getPackVersion(){
 
 async function bootPackSelectors(){
   const packSel = packIdEl();
-  const verSel = packVerEl();
+  const verSel  = packVerEl();
   if (!packSel || !verSel) return;
+
   const idx = await httpjson(`${apiBase()}/packs/index`);
-  const packs = Array.isArray(idx.packs) ? idx.packs : [];
-  const defPackId = idx.default_pack_id || "";
-  const defVer = idx.default_pack_version || "";
+  const packs = Array.isArray(idx?.packs) ? idx.packs : [];
+  const defPackId = idx?.default?.pack_id || "";
+  const defVer    = idx?.default?.pack_version || "";
 
   // pack options
-  const packIds = [...new Set(packs.map(p=>p.pack_id).filter(Boolean))];
   packSel.innerHTML = "";
-  for (const pid of packIds){
+  const p0 = document.createElement("option");
+  p0.value = "";
+  p0.textContent = EMPTY_TEXT;
+  packSel.appendChild(p0);
+
+  packs.forEach((p) => {
     const opt = document.createElement("option");
-    opt.value = pid;
-    opt.textContent = pid;
+    opt.value = String(p.pack_id || "").trim();
+    opt.textContent = String(p.label || p.pack_id || "").trim();
     packSel.appendChild(opt);
-  }
+  });
 
   function renderVersionsFor(pid){
     verSel.innerHTML = "";
-    const vers = packs.filter(p=>p.pack_id===pid).map(p=>p.pack_version).filter(Boolean);
-    for (const v of vers){
+    const v0 = document.createElement("option");
+    v0.value = "";
+    v0.textContent = EMPTY_TEXT;
+    verSel.appendChild(v0);
+
+    const p = packs.find(x => String(x.pack_id||"") === String(pid||""));
+    const vers = Array.isArray(p?.versions) ? p.versions : [];
+    vers.forEach((v) => {
       const opt = document.createElement("option");
-      opt.value = v;
-      opt.textContent = v;
+      opt.value = String(v.pack_version || "").trim();
+      opt.textContent = String(v.label || v.pack_version || "").trim();
       verSel.appendChild(opt);
-    }
+    });
   }
 
-  if (defPackId && packIds.includes(defPackId)) packSel.value = defPackId;
-  renderVersionsFor(packSel.value || packIds[0] || "");
+  // default selection by index.json (frontend does not decide)
+  if (defPackId) packSel.value = defPackId;
+  renderVersionsFor(packSel.value);
   if (defVer) verSel.value = defVer;
 
-  on(packSel, "change", ()=>{
+  packSel.addEventListener("change", () => {
     renderVersionsFor(packSel.value);
     syncAccountPackDisplay();
+    syncAccountPackHidden();
   });
+
+  verSel.addEventListener("change", () => {
+    syncAccountPackDisplay();
+    syncAccountPackHidden();
+  });
+
+  // initial sync
+  syncAccountPackDisplay();
+  syncAccountPackHidden();
 }
 function getPackLabel(){
   const el = packIdEl();
