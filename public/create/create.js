@@ -15,12 +15,13 @@
   }
   
   function apiBase() {
-  const u = new URL(location.href);
-  const fromQuery = u.searchParams.get("api");
-  if (fromQuery) return fromQuery.replace(/\/+$/, "");
-  const el = $("apiBase");
-  if (el && el.value) return el.value.replace(/\/+$/, "");
-  return ""; // 不默认写死
+    const u = new URL(location.href);
+    const fromQuery = u.searchParams.get("api");
+    if (fromQuery) return fromQuery.replace(/\/+$/, "");
+    const el = $("apiBase");
+    const v = (el && el.value ? el.value : "").trim().replace(/\/+$/, "");
+    if (!v) throw new Error("api_base_empty");
+    return v;
   }
 
   function escapeHtml(s) {
@@ -33,7 +34,7 @@
   }
 
   async function fetchPacksIndex() {
-  return await httpJson(`${apiBase()}/packs/index`, { method: "GET" });
+  return await httpjson(`${apiBase()}/packs/index`, { method: "GET" });
   }
   
   async function bootPackSelectors() {
@@ -98,12 +99,8 @@
     return data;
   }
 
-  function apiBase() {
-    const v = ($("apiBase")?.value || "").trim().replace(/\/+$/, "");
-    if (!v) throw new Error("api_base_empty");
-    return v;
-  }
   function getPackId() { return $("packId")?.value || ""; }
+  
   function getPackVersion() {
     const v = ($("packVersion")?.value || "").trim();
     if (!v) throw new Error("pack_version_required");
@@ -157,10 +154,14 @@
 
   const INIT_STAGE = "S0";
 
-  window.addEventListener("DOMContentLoaded", () => {
-    await bootPackSelectors();
-    bindEvents();
-    boot().catch((e) => setStatus("err", e.message));
+  window.addEventListener("DOMContentLoaded", async () => {
+    try {
+      await bootPackSelectors();   // 先加载 packs/index 填下拉
+      bindEvents();
+      await boot();                // boot 本身是 async，直接 await
+    } catch (e) {
+      setStatus("err", e.message || String(e));
+    }
   });
 
   function bindEvents() {
