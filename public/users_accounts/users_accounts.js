@@ -1,8 +1,5 @@
 /* TrackLab users + accounts create page (no hard-link; pack index driven)
- * Works with existing /public/users_accounts/index.html element IDs.
- * - apiBase: read from ?api=... OR /config.json OR existing input value
- * - packId/packVersion: populated from GET {apiBase}/packs/index
- * - user list + create user/account: via Worker endpoints
+ * v4.1: add "请选择" option to pack/version selects (keep default auto-select behavior)
  */
 
 const EMPTY_TEXT = "请选择";
@@ -80,8 +77,7 @@ function syncAccountPackDisplay(){
   }
 }
 
-// Compatibility: some earlier builds referenced this name.
-// Keep as no-op so page never breaks even if HTML or other scripts call it.
+// Compatibility: earlier builds referenced this name.
 window.syncAccountPackHidden = function(){ /* no-op */ };
 
 function setDisabledByUserSelected(disabled){
@@ -105,7 +101,6 @@ function qs(){
 }
 
 async function loadConfig(){
-  // priority: ?api=... > /config.json > existing input
   const p = qs().get("api");
   if (p){
     const el = $id("apiBase");
@@ -132,6 +127,11 @@ function setSchemaHint(){
   el.textContent = `就绪（users/accounts）｜${pid || "-"} / ${ver || "-"}`;
 }
 
+/* =======================
+ * 关键修改点：renderPackSelectors
+ * - packId / packVersion 下拉都插入“请选择”
+ * - 保持原本默认选中逻辑（defPid/第一个pack，defVer/第一个version）
+ * ======================= */
 function renderPackSelectors(idx){
   const packSel = packIdEl();
   const verSel  = packVerEl();
@@ -141,18 +141,25 @@ function renderPackSelectors(idx){
   const defPid = idx?.default?.pack_id || "";
   const defVer = idx?.default?.pack_version || "";
 
-  // pack options
-  packSel.innerHTML = packs.map(p=>{
-    const pid = p.pack_id || p.id || "";
-    const label = p.label || pid;
-    return `<option value="${escapeHtml(pid)}">${escapeHtml(label)}</option>`;
-  }).join("");
+  // pack options + placeholder
+  packSel.innerHTML =
+    `<option value="">${EMPTY_TEXT}</option>` +
+    packs.map(p=>{
+      const pid = p.pack_id || p.id || "";
+      const label = p.label || pid;
+      return `<option value="${escapeHtml(pid)}">${escapeHtml(label)}</option>`;
+    }).join("");
 
-  // choose default pack
-  if (defPid && [...packSel.options].some(o=>o.value===defPid)) packSel.value = defPid;
-  else if (packSel.options.length) packSel.selectedIndex = 0;
+  // choose default pack (keep old behavior)
+  if (defPid && [...packSel.options].some(o=>o.value===defPid)) {
+    packSel.value = defPid;
+  } else if (packSel.options.length > 1) {
+    // index 0 is placeholder; select first real pack
+    packSel.selectedIndex = 1;
+  } else {
+    packSel.value = "";
+  }
 
-  // render versions for selected pack
   const versionsFor = (pid)=>{
     const p = packs.find(x => (x.pack_id||x.id||"") === pid);
     const vers = Array.isArray(p?.versions) ? p.versions : [];
@@ -165,10 +172,22 @@ function renderPackSelectors(idx){
 
   const renderVersions = ()=>{
     const pid = getPackId();
-    const vers = versionsFor(pid);
-    verSel.innerHTML = vers.map(v=>`<option value="${escapeHtml(v.pv)}">${escapeHtml(v.label)}</option>`).join("");
-    if (pid === defPid && defVer && [...verSel.options].some(o=>o.value===defVer)) verSel.value = defVer;
-    else if (verSel.options.length) verSel.selectedIndex = 0;
+    const vers = pid ? versionsFor(pid) : [];
+
+    verSel.innerHTML =
+      `<option value="">${EMPTY_TEXT}</option>` +
+      vers.map(v=>`<option value="${escapeHtml(v.pv)}">${escapeHtml(v.label)}</option>`).join("");
+
+    // choose default version (keep old behavior)
+    if (pid && pid === defPid && defVer && [...verSel.options].some(o=>o.value===defVer)) {
+      verSel.value = defVer;
+    } else if (verSel.options.length > 1) {
+      // index 0 is placeholder; select first real version
+      verSel.selectedIndex = 1;
+    } else {
+      verSel.value = "";
+    }
+
     syncAccountPackDisplay();
     setSchemaHint();
   };
