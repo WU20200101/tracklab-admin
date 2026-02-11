@@ -181,6 +181,11 @@ function syncAccountPackDisplay(){
   }
 }
 
+// v2 兼容：旧版本可能需要同步隐藏字段，但当前实现创建账号时直接取 getPackId/getPackVersion。
+// 保留一个 no-op，避免页面因未定义报错。
+function syncAccountPackHidden(){ /* no-op */ }
+
+
 function setDisabledByUserSelected(disabled){
   const ids = [
     "accountHandle",
