@@ -1,12 +1,11 @@
-/* TrackLab Client (Refactor v2026-02-06)
- * - 结构分区：Storage / DOM / HTTP / Getters / UI / Loaders / Actions / Bind / Boot
- * - 修复 localStorage helper 的递归 bug
- * - 去重 httpjson/httpJson：保留一个 httpJson
- * - 保持原有业务逻辑：owner -> accounts -> presets，preview/generate/feedback/outcome/stats 不改
+/* TrackLab Client (Refactor v2026-02-11)
+ * - 基于你提供的“上一版 client.js”（不在你已改乱的版本上继续叠）
+ * - 新增：从 GitHub Pages 根目录读取 config.json 自动设置 apiBase
+ * - 新增：从 Worker 的 /packs/index 拉取 packId / packVersion 下拉选项（默认值由 index.json 决定）
+ * - 保持：原有业务流程与接口调用逻辑不变（owner -> accounts -> presets -> preview/generate/feedback/outcome/stats）
  *
- * [2026-02-11 PATCH]
- * - GitHub Pages: apiBase 来自 ./config.json（或 ?api= 覆盖），不再前端写死
- * - pack/version 下拉来自 /packs/index（不再写死 xhs / v1.0.0）
+ * 约束对齐：
+ * - 前端不做策略判断、不做 stage/pack 逻辑，只负责“取配置 + 展示 + 发请求”
  */
 
 (() => {
@@ -20,12 +19,9 @@
   const LS_ACCOUNT_KEY = "tracklab_account_id";
 
   let currentPreset = null; // preset/get item
-  let __inFlight = {
-    preview: false,
-    generate: false,
-  };
+  let __inFlight = { preview: false, generate: false };
 
-  // api base cache (from config.json or ?api=)
+  // api base：由 ?api= 或 config.json 决定
   let __API_BASE = "";
 
   /** =====================================================
@@ -54,13 +50,13 @@
 
   function setPre(id, obj) {
     const el = $(id);
-    if (!el) return; // UI 删了也不报错
+    if (!el) return;
     el.textContent =
       obj == null ? EMPTY_TEXT : typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
   }
 
   /** =====================================================
-   * STORAGE HELPERS (FIXED)
+   * STORAGE HELPERS
    * ===================================================== */
   function lsGet(key) {
     if (!REMEMBER_LAST) return "";
@@ -70,14 +66,12 @@
       return "";
     }
   }
-
   function lsSet(key, value) {
     if (!REMEMBER_LAST) return;
     try {
       localStorage.setItem(key, String(value ?? ""));
     } catch {}
   }
-
   function lsDel(key) {
     if (!REMEMBER_LAST) return;
     try {
@@ -112,58 +106,52 @@
     return data || {};
   }
 
-  // 如你之前所做：挂全局，避免作用域/顺序问题
+  // 挂全局，兼容你其它页面/旧代码
   window.httpjson = httpJson;
 
   /** =====================================================
-   * API BASE (GitHub Pages config.json)
+   * API BASE BOOT (config.json / ?api=)
    * ===================================================== */
-  function apiBase() {
-    const u = new URL(location.href);
-    const fromQuery = u.searchParams.get("api");
-    if (fromQuery) return fromQuery.replace(/\/+$/, "");
-
-    if (__API_BASE) return __API_BASE.replace(/\/+$/, "");
-
-    throw new Error("api_base_not_ready");
+  function ghPagesRepoRootPath() {
+    const parts = location.pathname.split("/").filter(Boolean);
+    // GitHub Pages project site: https://<user>.github.io/<repo>/...
+    if (location.hostname.endsWith("github.io") && parts.length >= 1) {
+      return `/${parts[0]}/`;
+    }
+    return "/";
   }
 
   async function bootApiBase() {
     const u = new URL(location.href);
     const fromQuery = u.searchParams.get("api");
     if (fromQuery) {
-      __API_BASE = fromQuery.replace(/\/+$/, "");
+      __API_BASE = fromQuery.trim().replace(/\/+$/, "");
     } else {
-      
-      function ghPagesRepoRootPath() {
-        const parts = location.pathname.split("/").filter(Boolean);
-        // GitHub Pages project site: https://<user>.github.io/<repo>/...
-        if (location.hostname.endsWith("github.io") && parts.length >= 1) {
-          return `/${parts[0]}/`;
-        }
-        // non-github pages: same-origin root
-        return "/";
-      }
-
       const cfgUrl = new URL(`${ghPagesRepoRootPath()}config.json`, location.origin).toString();
       const resp = await fetch(cfgUrl, { cache: "no-store" });
-
       if (!resp.ok) throw new Error("config_json_not_found");
       const cfg = await resp.json();
       __API_BASE = String(cfg.api_base || "").trim().replace(/\/+$/, "");
       if (!__API_BASE) throw new Error("api_base_missing_in_config");
     }
 
-    // 仅用于展示/调试，不参与逻辑判断
+    // 仅展示，不参与判断
     const el = $("apiBase");
     if (el) el.value = __API_BASE;
   }
 
   /** =====================================================
-   * PACK SELECTORS (from /packs/index)
+   * GETTERS
    * ===================================================== */
+  function apiBase() {
+    // 优先使用 bootApiBase 的结果；否则退回输入框（兼容旧用法）
+    const v = (__API_BASE || $("apiBase")?.value || "").trim().replace(/\/+$/, "");
+    if (!v) throw new Error("接口地址不能为空");
+    return v;
+  }
+
   function getPackId() {
-    return $("packId")?.value || "";
+    return ($("packId")?.value || "").trim();
   }
 
   function getPackVersion() {
@@ -174,61 +162,6 @@
     return v;
   }
 
-  async function bootPackSelectors() {
-    const packSel = $("packId");
-    const verSel = $("packVer") || $("packVersion");
-    if (!packSel || !verSel) return; // 这个页面没有 pack/version 下拉就跳过
-
-    // 拉 packs/index
-    const idx = await httpJson(`${apiBase()}/packs/index`, { method: "GET" });
-
-    const packs = idx.packs || [];
-    const defPackId = idx?.default?.pack_id || "";
-    const defVer = idx?.default?.pack_version || "";
-
-    // 填 pack 下拉
-    packSel.innerHTML =
-      `<option value="">${EMPTY_TEXT}</option>` +
-      packs
-        .map((p) => {
-          const id = String(p.pack_id || "");
-          const label = String(p.label || p.pack_id || "");
-          return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
-        })
-        .join("");
-
-    if (!packSel.value && defPackId) packSel.value = defPackId;
-
-    function renderVersions() {
-      const curPackId = (packSel.value || "").trim();
-      const p = packs.find((x) => x.pack_id === curPackId);
-      const vers = p?.versions || [];
-
-      verSel.innerHTML =
-        `<option value="">${EMPTY_TEXT}</option>` +
-        vers
-          .map((v) => {
-            const pv = String(v.pack_version || "");
-            const label = String(v.label || v.pack_version || "");
-            return `<option value="${escapeHtml(pv)}">${escapeHtml(label)}</option>`;
-          })
-          .join("");
-
-      // 默认版本只允许来自：pack.default_pack_version 或 idx.default（不做 vers[0] fallback）
-      if (!verSel.value) {
-        const pv = (p && p.default_pack_version) ? String(p.default_pack_version) : "";
-        if (pv) verSel.value = pv;
-        else if (curPackId && curPackId === defPackId && defVer) verSel.value = defVer;
-      }
-    }
-
-    renderVersions();
-    packSel.addEventListener("change", () => renderVersions());
-  }
-
-  /** =====================================================
-   * GETTERS (STRICT)
-   * ===================================================== */
   function getOwnerIdStrict() {
     const v = ($("ownerId")?.value || "").trim();
     if (!v) throw new Error("用户名为空：先选择用户名");
@@ -297,6 +230,68 @@
   }
 
   /** =====================================================
+   * PACK SELECTORS (from /packs/index)
+   * ===================================================== */
+  async function bootPackSelectors() {
+    const packSel = $("packId");
+    const verSel = $("packVer") || $("packVersion");
+    if (!packSel || !verSel) return; // 页面没有这俩控件就不处理
+
+    // 拉 index
+    const idx = await httpJson(`${apiBase()}/packs/index`, { method: "GET" });
+    const packs = Array.isArray(idx.packs) ? idx.packs : [];
+    const defPackId = idx?.default?.pack_id || "";
+    const defVer = idx?.default?.pack_version || "";
+
+    // pack 下拉
+    packSel.innerHTML = "";
+    const p0 = document.createElement("option");
+    p0.value = "";
+    p0.textContent = "请选择";
+    packSel.appendChild(p0);
+
+    packs.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = String(p.pack_id || "").trim();
+      opt.textContent = String(p.label || p.pack_id || "").trim();
+      packSel.appendChild(opt);
+    });
+
+    // 版本联动渲染（仅展示）
+    function renderVersionsFor(packId) {
+      verSel.innerHTML = "";
+      const v0 = document.createElement("option");
+      v0.value = "";
+      v0.textContent = "请选择";
+      verSel.appendChild(v0);
+
+      const p = packs.find((x) => String(x.pack_id || "") === String(packId || ""));
+      const vers = Array.isArray(p?.versions) ? p.versions : [];
+      vers.forEach((v) => {
+        const opt = document.createElement("option");
+        opt.value = String(v.pack_version || "").trim();
+        opt.textContent = String(v.label || v.pack_version || "").trim();
+        verSel.appendChild(opt);
+      });
+    }
+
+    // 默认选择：完全由 index.json 决定（前端不判断）
+    if (defPackId) packSel.value = defPackId;
+    renderVersionsFor(packSel.value);
+    if (defVer) verSel.value = defVer;
+
+    // 绑定变化：只更新版本下拉，不做任何策略
+    packSel.addEventListener("change", () => {
+      renderVersionsFor(packSel.value);
+      clearAccountsUI();
+      clearPresetsUI();
+      setPre("accountOut", null);
+      setPre("presetOut", null);
+      setStatus("info", "pack 已切换：请重新选择用户名/账号/角色");
+    });
+  }
+
+  /** =====================================================
    * LOADERS
    * ===================================================== */
   async function loadOwners() {
@@ -319,8 +314,8 @@
         id;
 
       const opt = document.createElement("option");
-      opt.value = id; // users.id
-      opt.textContent = label; // display_name / username / id
+      opt.value = id;
+      opt.textContent = label;
       sel.appendChild(opt);
     });
   }
@@ -359,7 +354,6 @@
 
     setPre("accountOut", out);
 
-    // 还原上次 account（同一 owner 下）
     const savedAccount = lsGet(LS_ACCOUNT_KEY) || "";
     if (savedAccount && items.some((x) => x.id === savedAccount)) {
       sel.value = savedAccount;
@@ -395,7 +389,6 @@
     const empty = document.createElement("option");
     empty.value = "";
 
-    // 三态文案：未选账号 / 有账号但无结果 / 有结果
     if (!account_id) empty.textContent = "请选择有效账号";
     else if (items.length === 0) empty.textContent = "当前筛选条件无角色";
     else empty.textContent = "请选择";
@@ -461,7 +454,6 @@
       lsSet(LS_ACCOUNT_KEY, out.account.id);
     }
 
-    // 创建后立即刷新 presets（按新 account 过滤）
     await presetRefreshList();
   }
 
@@ -664,7 +656,7 @@
 
     setPre("evalOut", renderEvaluationReadable(out?.evaluation));
     try {
-      await presetLoad(); // advance 后刷新 preset 事实
+      await presetLoad();
     } catch {}
 
     setStatus("ok", `feedback 已写入；action=${out?.evaluation?.action || "none"}`);
@@ -794,8 +786,20 @@
    * INIT
    * ===================================================== */
   function setDefaults() {
-    // 注意：不再写死 apiBase / packId / version（封版要求）
-    if ($("enabledOnly")) $("enabledOnly").value = "1";
+    // 不再硬编码 apiBase/packId/packVer：由 bootApiBase + /packs/index 决定
+    const setVal = (id, val) => {
+      const el = $(id);
+      if (el) el.value = val;
+    };
+
+    // 兼容：如果页面没有 config.json 或你要临时 override，可手工填输入框
+    if ($("apiBase") && $("apiBase").value) {
+      // 保留用户输入
+    } else {
+      setVal("apiBase", "");
+    }
+
+    setVal("enabledOnly", "1");
 
     if ($("fbDate")) ensureDateDefault("fbDate");
     if ($("ocDate")) ensureDateDefault("ocDate");
@@ -826,14 +830,13 @@
 
   async function boot() {
     setDefaults();
+    bindEvents();
 
-    setStatus("info", "初始化 apiBase 中…");
+    setStatus("info", "初始化 api_base 中…");
     await bootApiBase();
 
-    setStatus("info", "加载 packs/index 中…");
+    setStatus("info", "初始化 pack 列表中…");
     await bootPackSelectors();
-
-    bindEvents();
 
     setStatus("info", "初始化 owners 中…");
     await loadOwners();
@@ -847,12 +850,5 @@
     setStatus("ok", "就绪");
   }
 
-  window.addEventListener("DOMContentLoaded", () => {
-    boot().catch(showError);
-  });
+  boot().catch(showError);
 })();
-
-
-
-
-
