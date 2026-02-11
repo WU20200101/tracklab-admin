@@ -16,6 +16,34 @@
     if (el) el.addEventListener(evt, fn);
   };
 
+  /** =====================================================
+   * API BASE BOOT (config.json / ?api=) —— 与 client.js 一致
+   * ===================================================== */
+  let __API_BASE = "";
+
+  function ghPagesRepoRootPath() {
+    const parts = location.pathname.split("/").filter(Boolean);
+    if (location.hostname.endsWith("github.io") && parts.length >= 1) return `/${parts[0]}/`;
+    return "/";
+  }
+
+  async function bootApiBase() {
+    const u = new URL(location.href);
+    const fromQuery = u.searchParams.get("api");
+    if (fromQuery) {
+      __API_BASE = fromQuery.trim().replace(/\/+$/, "");
+    } else {
+      const cfgUrl = new URL(`${ghPagesRepoRootPath()}config.json`, location.origin).toString();
+      const resp = await fetch(cfgUrl, { cache: "no-store" });
+      if (!resp.ok) throw new Error("config_json_not_found");
+      const cfg = await resp.json();
+      __API_BASE = String(cfg.api_base || "").trim().replace(/\/+$/, "");
+      if (!__API_BASE) throw new Error("api_base_missing_in_config");
+    }
+    const el = $("apiBase");
+    if (el) el.value = __API_BASE;
+  }
+
   function setStatus(type, msg) {
     const el = $("status");
     if (!el) return;
@@ -58,7 +86,7 @@
    * BASIC GETTERS
    * ===================================================== */
   function apiBase() {
-    const v = ($("apiBase")?.value || "").trim().replace(/\/+$/, "");
+    const v = (__API_BASE || $("apiBase")?.value || "").trim().replace(/\/+$/, "");
     if (!v) throw new Error("api_base_empty");
     return v;
   }
@@ -69,6 +97,65 @@
     const v = ($("packVersion")?.value || "").trim();
     if (!v) throw new Error("pack_version_required");
     return v;
+  }
+
+  /** =====================================================
+   * PACK SELECTORS (from /packs/index) —— 与 client.js 一致
+   * ===================================================== */
+  async function bootPackSelectors() {
+    const packSel = $("packId");
+    const verSel = $("packVer") || $("packVersion");
+    if (!packSel || !verSel) return;
+
+    const idx = await httpjson(`${apiBase()}/packs/index`, { method: "GET" });
+    const packs = Array.isArray(idx?.packs) ? idx.packs : [];
+    const defPackId = idx?.default?.pack_id || "";
+    const defVer = idx?.default?.pack_version || "";
+
+    packSel.innerHTML = "";
+    const p0 = document.createElement("option");
+    p0.value = "";
+    p0.textContent = EMPTY_TEXT;
+    packSel.appendChild(p0);
+    packs.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = String(p.pack_id || "").trim();
+      opt.textContent = String(p.label || p.pack_id || "").trim();
+      packSel.appendChild(opt);
+    });
+
+    function renderVersionsFor(packId) {
+      verSel.innerHTML = "";
+      const v0 = document.createElement("option");
+      v0.value = "";
+      v0.textContent = EMPTY_TEXT;
+      verSel.appendChild(v0);
+
+      const p = packs.find((x) => String(x.pack_id || "") === String(packId || ""));
+      const vers = Array.isArray(p?.versions) ? p.versions : [];
+      vers.forEach((v) => {
+        const opt = document.createElement("option");
+        opt.value = String(v.pack_version || "").trim();
+        opt.textContent = String(v.label || v.pack_version || "").trim();
+        verSel.appendChild(opt);
+      });
+    }
+
+    if (defPackId) packSel.value = defPackId;
+    renderVersionsFor(packSel.value);
+    if (defVer) verSel.value = defVer;
+
+    packSel.addEventListener("change", () => {
+      renderVersionsFor(packSel.value);
+      // 仅重置 UI 状态，不做策略判断
+      uiSchema = null;
+      manifest = null;
+      currentOwnerId = "";
+      currentAccountId = "";
+      currentPresetId = "";
+      setStatus("info", "pack 已切换：请重新选择用户名/账号/角色");
+      boot().catch((e) => setStatus("err", e.message));
+    });
   }
 
   /** =====================================================
@@ -146,21 +233,17 @@
    * BOOT
    * ===================================================== */
   window.addEventListener("DOMContentLoaded", () => {
-    // 固定 API base（页面上只读灰色）
-    if ($("apiBase")) $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
-
-    // 固定 pack（你当前只用 xhs/v1.0.0）
-    if ($("packId")) $("packId").innerHTML = `<option value="xhs">小红书</option>`;
-    if ($("packVersion")) $("packVersion").innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
-
-    bindEvents();
-    boot().catch((e) => setStatus("err", e.message));
+    (async () => {
+      await bootApiBase();
+      await bootPackSelectors();
+      bindEvents();
+      await boot();
+    })().catch((e) => setStatus("err", e.message));
   });
 
   function bindEvents() {
     on("btnLoad", "click", () => boot().catch((e) => setStatus("err", e.message)));
-    on("packId", "change", () => boot().catch((e) => setStatus("err", e.message)));
-    on("packVersion", "change", () => boot().catch((e) => setStatus("err", e.message)));
+    // packId/packVersion 的变更由 bootPackSelectors() 统一处理
 
     on("ownerId", "change", () => handleOwnerChanged().catch((e) => setStatus("err", e.message)));
     on("accountSelect", "change", () =>
