@@ -13,14 +13,71 @@
     el.textContent = msg || "";
     el.className = "status" + (type === "err" ? " err" : "");
   }
+  
+  function apiBase() {
+  const u = new URL(location.href);
+  const fromQuery = u.searchParams.get("api");
+  if (fromQuery) return fromQuery.replace(/\/+$/, "");
+  const el = $("apiBase");
+  if (el && el.value) return el.value.replace(/\/+$/, "");
+  return ""; // 不默认写死
+  }
 
   function escapeHtml(s) {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  }
+
+  async function fetchPacksIndex() {
+  return await httpJson(`${apiBase()}/packs/index`, { method: "GET" });
+  }
+  
+  async function bootPackSelectors() {
+  const packSel = $("packId");
+  const verSel  = $("packVersion");
+  if (!packSel || !verSel) return;
+
+  const idx = await fetchPacksIndex();
+
+  const packs = idx.packs || [];
+  const defPackId = idx.default?.pack_id || "";
+  const defVer = idx.default?.pack_version || "";
+
+  packSel.innerHTML =
+    `<option value="">请选择</option>` +
+    packs.map(p => `<option value="${escapeHtml(p.pack_id)}">${escapeHtml(p.label || p.pack_id)}</option>`).join("");
+
+  // 默认选择：完全由 index.json 决定（前端不判断）
+  if (!packSel.value) packSel.value = defPackId;
+
+  function renderVersions() {
+  const curPackId = (packSel.value || "").trim();
+  const p = packs.find(x => x.pack_id === curPackId);
+  const vers = p?.versions || [];
+
+  verSel.innerHTML =
+    `<option value="">请选择</option>` +
+    vers.map(v => `<option value="${escapeHtml(v.pack_version)}">${escapeHtml(v.label || v.pack_version)}</option>`).join("");
+
+  // 版本默认：只按 pack 的 default_pack_version 或全局 default 生效
+  if (!verSel.value) {
+    const pv = p?.default_pack_version || "";
+    if (pv) verSel.value = pv;
+    else if (curPackId === defPackId) verSel.value = defVer;
+    // 否则保持空，让用户选（不做任何 fallback 选择）
+  }
+}
+
+  renderVersions();
+
+  packSel.addEventListener("change", () => {
+    verSel.value = "";
+    renderVersions();
+  });
   }
 
   async function httpjson(url, opt = {}) {
@@ -101,13 +158,7 @@
   const INIT_STAGE = "S0";
 
   window.addEventListener("DOMContentLoaded", () => {
-    // 固定 API base（页面上只读灰色）
-    if ($("apiBase")) $("apiBase").value = "https://tracklab-api.wuxiaofei1985.workers.dev";
-
-    // 固定 pack（你当前只用 xhs/v1.0.0）
-    if ($("packId")) $("packId").innerHTML = `<option value="xhs">小红书</option>`;
-    if ($("packVersion")) $("packVersion").innerHTML = `<option value="v1.0.0">v1.0.0</option>`;
-
+    await bootPackSelectors();
     bindEvents();
     boot().catch((e) => setStatus("err", e.message));
   });
