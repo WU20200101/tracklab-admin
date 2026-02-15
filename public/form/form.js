@@ -557,6 +557,19 @@
           setControlDisabled(input, !isEditable);
         }
 
+        // ✅ stage: 更新/升级页“可见但不可改”
+        const stageFieldKey = manifest?.preset?.stage_field || "stage";
+        const isStageField = key === stageFieldKey;
+
+        // 已加载 preset（更新/升级页），一律锁死 stage
+        if (isStageField && currentPreset?.id) {
+          setControlDisabled(input, true);
+        } else if (isTopicSelector && currentPreset?.id) {
+          setControlDisabled(input, true);
+        } else {
+          setControlDisabled(input, !isEditable);
+        }
+
         wrap.appendChild(input);
 
         if (f.help) {
@@ -758,4 +771,5 @@
     if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
   }
 })();
+
 
