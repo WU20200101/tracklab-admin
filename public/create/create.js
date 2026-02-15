@@ -512,6 +512,13 @@
 
     const payload = readS0PayloadOrThrow();
 
+    // ✅ 从 S0 payload 中提取 stage_rules_ref，上提为 create_bound 顶层字段
+    const stage_rules_ref = String(payload?.stage_rules_ref || "").trim();
+    if (!stage_rules_ref) throw new Error("请选择升级/作废规则（stage_rules_ref）");
+
+    // 可选：避免它继续混在 payload 里（防 prompt 污染）
+    delete payload.stage_rules_ref;
+
     // === 核心：创建 preset + 绑定到账号 ===
     // 你的后端如果是“创建时带 account_id 就自动写 binding”，用下面这个即可。
     // 如果你是分两步：先 /preset/create 再 /binding/create，需要把这里改成两次调用（我在注释中给出示意）。
@@ -522,8 +529,10 @@
       name,
       owner_id: currentOwnerId,
       account_id: currentAccountId,
+      stage_rules_ref,   // ✅ 新增：create_bound 需要它
       payload,
     };
+
 
     // 优先尝试一个你可能已经做过的“原子接口名”
     // 1) /preset/create_bound  (推荐：原子写 preset + binding)
