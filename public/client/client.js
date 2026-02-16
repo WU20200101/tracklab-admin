@@ -331,13 +331,16 @@
   }
 
   function buildInjectedFreeText(structureBlock, userNote) {
-    const s = (structureBlock || "").trim();
-    const note = (userNote || "").trim();
-    if (!s && !note) return "";
-    if (s && !note) return `【表达偏好】\n${s}\n`;
-    if (!s && note) return note;
-    return `【表达偏好】\n${s}\n\n【补充备注】\n${note}\n`;
-  }
+  const s = (structureBlock || "").trim();
+  const note = (userNote || "").trim();
+
+  if (!s && !note) return "";
+  if (s && !note) return `${s}\n`;
+  if (!s && note) return note;
+
+  // 仍保留分层，但不使用显眼标签；用空行做弱分隔
+  return `${s}\n\n${note}\n`;
+}
 
   async function fetchPackStructures(pack_id, pack_version) {
     // 用 /packs/index 来发现可用的 public_base（如果 index 没给，就先按约定路径尝试）
@@ -1071,6 +1074,7 @@
 
   boot().catch(showError);
 })();
+
 
 
 
