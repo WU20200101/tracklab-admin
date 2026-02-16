@@ -407,7 +407,7 @@
       return weightedPick(weightsNorm, u);
     };
 
-    let pick = pickOnce("");
+    pick = pickOnce("|retry1");
     if (!pick || !variants[pick]?.block) {
       const keys = Object.keys(variants);
       pick = keys.length ? keys[0] : null;
@@ -1073,6 +1073,7 @@ if (nextPayload && typeof nextPayload === "object" && "meta" in nextPayload) {
 
   boot().catch(showError);
 })();
+
 
 
 
