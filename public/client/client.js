@@ -382,7 +382,7 @@
     const levelKey = preset?.level || preset?.preset_level || "L0";
 
     // preset 权重优先：preset.meta.structure_weights[levelKey]
-    const presetMeta = preset?.meta || null;
+    const presetMeta = (preset && preset.payload && preset.payload.meta) ? preset.payload.meta : null;
     const presetWeightsRaw =
       presetMeta?.structure_weights && presetMeta.structure_weights[levelKey]
         ? presetMeta.structure_weights[levelKey]
@@ -423,13 +423,12 @@
       setLastTwoToLS(historyKey, [...lastTwo, pick]);
     }
 
-    const nextPayload = { ...payload };
-    const original = nextPayload[injectTarget] || "";
-    const structureBlock = pick && variants[pick] ? variants[pick].block : "";
-    nextPayload[injectTarget] = buildInjectedFreeText(structureBlock, original);
+    // IMPORTANT: meta 只用于前端选结构，不能发给 Worker（会被 whitelist 拦）
+const nextPayload = { ...payload };
+if (nextPayload && typeof nextPayload === "object" && "meta" in nextPayload) {
+  delete nextPayload.meta;
+}
 
-    return nextPayload;
-  }
 
   /** =====================================================
    * PACK SELECTORS (from /packs/index)
@@ -1074,6 +1073,7 @@
 
   boot().catch(showError);
 })();
+
 
 
 
