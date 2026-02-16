@@ -379,7 +379,7 @@
     const levelKey = preset?.level || preset?.preset_level || "L0";
 
     // preset 权重优先：preset.meta.structure_weights[levelKey]
-    const presetMeta = preset?.meta || payload?.meta || null;
+    const presetMeta = preset?.meta || null;
     const presetWeightsRaw =
       presetMeta?.structure_weights && presetMeta.structure_weights[levelKey]
         ? presetMeta.structure_weights[levelKey]
@@ -424,11 +424,6 @@
     const original = nextPayload[injectTarget] || "";
     const structureBlock = pick && variants[pick] ? variants[pick].block : "";
     nextPayload[injectTarget] = buildInjectedFreeText(structureBlock, original);
-
-    nextPayload.meta = { ...(nextPayload.meta || {}) };
-    nextPayload.meta.structure_id = pick || null;
-    nextPayload.meta.structure_level = levelKey;
-    nextPayload.meta.structure_day = day;
 
     return nextPayload;
   }
@@ -1076,5 +1071,6 @@
 
   boot().catch(showError);
 })();
+
 
 
