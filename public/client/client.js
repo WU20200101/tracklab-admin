@@ -785,7 +785,7 @@
 
       setStatus("info", "Generate 中…");
 
-            const pack_id = getPackId();
+      const pack_id = getPackId();
       const pack_version = getPackVersion();
 
       const decoratedPayload = await decoratePayloadWithStructure({
@@ -1097,6 +1097,7 @@
 
   boot().catch(showError);
 })();
+
 
 
 
