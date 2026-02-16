@@ -810,10 +810,6 @@ function joinBatchOutputs(outs) {
     const pack_version = getPackVersion();
 
     // 读取 batch_size（注意：你 payload 里是字符串）
-    const nRaw = currentPreset?.payload?.batch_size ?? "1";
-    const n = Math.max(1, parseInt(String(nRaw), 10) || 1);
-
-    // 读取 batch_size（注意：你 payload 里是字符串）
 const nRaw = currentPreset?.payload?.batch_size ?? "1";
 const n = Math.max(1, parseInt(String(nRaw), 10) || 1);
 
@@ -1124,6 +1120,7 @@ setStatus("ok", `Generate 完成：${n} 条（单次请求）；job_id=${out?.jo
 
   boot().catch(showError);
 })();
+
 
 
 
