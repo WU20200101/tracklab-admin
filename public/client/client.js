@@ -541,7 +541,6 @@
 
       const meta = await getPackMeta(getPackId(), getPackVersion());
       const payloadPicked = applyTransformsByUiSchema(meta?.ui_schema, currentPreset.payload);
-      console.log("[DEBUG] payloadPicked", payloadPicked);
       
       const out = await httpJson(`${apiBase()}/preview`, {
         method: "POST",
@@ -908,5 +907,6 @@
   boot().catch(showError);
 
 })();
+
 
 
