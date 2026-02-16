@@ -771,25 +771,49 @@
     return `标题：${title}\n副标题：${subtitle}\n--------\n正文：\n${content}\n--------\n标签：${tags}`;
   }
 
+  function extractDisplayTextFromGenerate(out) {
+  const text = out?.output_text || out?.outputText;
+  if (typeof text === "string" && text.trim()) return text.trim();
+
+  const outputObj = out?.output || out?.output_json || {};
+  if (typeof outputObj === "string") return outputObj.trim();
+  return JSON.stringify(outputObj, null, 2);
+}
+
+function joinBatchOutputs(outs) {
+  return (outs || [])
+    .map((o, i) => `--- 第 ${i + 1} 条 ---\n${extractDisplayTextFromGenerate(o)}`)
+    .join("\n\n");
+}
+
   async function generateContent() {
-    if (__inFlight.generate) return;
-    __inFlight.generate = true;
+  if (__inFlight.generate) return;
+  __inFlight.generate = true;
 
-    const btn = document.getElementById("btnGenerate");
-    if (btn) btn.disabled = true;
+  const btn = document.getElementById("btnGenerate");
+  if (btn) btn.disabled = true;
 
-    try {
-      const preset_id = getPresetIdStrict();
-      if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-      ensurePresetEnabledForOps();
+  try {
+    const preset_id = getPresetIdStrict();
+    if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+    ensurePresetEnabledForOps();
 
-      setStatus("info", "Generate 中…");
+    setStatus("info", "Generate 中…");
 
-      const pack_id = getPackId();
-      const pack_version = getPackVersion();
+    const pack_id = getPackId();
+    const pack_version = getPackVersion();
 
+    // 读取 batch_size（注意：你 payload 里是字符串）
+    const nRaw = currentPreset?.payload?.batch_size ?? "1";
+    const n = Math.max(1, parseInt(String(nRaw), 10) || 1);
+
+    // 强制每次请求 batch_size=1，确保每条都会重新 pick 结构
+    const payloadBase = { ...(currentPreset.payload || {}), batch_size: "1" };
+
+    const outs = [];
+    for (let i = 0; i < n; i++) {
       const decoratedPayload = await decoratePayloadWithStructure({
-        payload: currentPreset.payload,
+        payload: payloadBase,
         preset: currentPreset,
         pack_id,
         pack_version,
@@ -806,22 +830,22 @@
         }),
       });
 
-      setPre("genRaw", out);
-
-      const text = out.output_text || out.outputText;
-      if (typeof text === "string" && text.trim()) {
-        setPre("genText", text);
-      } else {
-        const outputObj = out.output || out.output_json || {};
-        setPre("genText", typeof outputObj === "string" ? outputObj : JSON.stringify(outputObj, null, 2));
-      }
-
-      setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
-    } finally {
-      __inFlight.generate = false;
-      if (btn) btn.disabled = false;
+      outs.push(out);
     }
+
+    // raw：展示数组（便于你 debug 每条的 job_id / output）
+    setPre("genRaw", outs);
+
+    // text：合并展示
+    setPre("genText", joinBatchOutputs(outs));
+
+    const jobIds = outs.map((x) => x?.job_id).filter(Boolean);
+    setStatus("ok", `Generate 完成：${outs.length} 条；job_id=${jobIds.join(",") || "na"}`);
+  } finally {
+    __inFlight.generate = false;
+    if (btn) btn.disabled = false;
   }
+}
 
   function readNonNegInt(id) {
     const v = ($(id)?.value ?? "").toString().trim();
@@ -1097,6 +1121,7 @@
 
   boot().catch(showError);
 })();
+
 
 
 
