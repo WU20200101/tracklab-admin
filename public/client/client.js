@@ -382,8 +382,7 @@
   const levelKey = preset?.level || preset?.preset_level || "L0";
 
   // 你把权重存进了 preset.payload.meta.structure_weights（来自 D1 presets.payload_json）
-  const presetMeta =
-    preset && preset.payload && preset.payload.meta ? preset.payload.meta : null;
+  const presetMeta = preset?.meta || null;
 
   const presetWeightsRaw =
     presetMeta?.structure_weights && presetMeta.structure_weights[levelKey]
@@ -633,6 +632,17 @@
     if (!out.item) throw new Error("preset_get 返回为空");
 
     currentPreset = out.item;
+    
+        // ====== IMPORTANT: 将 payload.meta 迁出，避免发给 Worker 触发 whitelist ======
+    if (currentPreset && currentPreset.payload && typeof currentPreset.payload === "object") {
+      if ("meta" in currentPreset.payload && currentPreset.payload.meta) {
+        // 把权重/配置保留在 preset.meta（不进入 payload）
+        currentPreset.meta = { ...(currentPreset.meta || {}), ...(currentPreset.payload.meta || {}) };
+        // 从 payload 中剥离 meta，保证 /preview /generate 永远不会携带 meta
+        delete currentPreset.payload.meta;
+      }
+    }
+
     setPre("presetOut", out.item);
     setStatus("ok", `Preset 已加载：${out.item.name || out.item.id}`);
     applyEnabledUi(out.item.enabled);
@@ -1087,6 +1097,7 @@
 
   boot().catch(showError);
 })();
+
 
 
 
