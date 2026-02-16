@@ -229,6 +229,56 @@
     if (el && !el.value) el.value = todayYMD();
   }
 
+    /** =====================================================
+   * PACK META + TRANSFORMS (pack-driven, no hardcode)
+   * ===================================================== */
+
+  // cache: key = `${pack_id}@${pack_version}`
+  const __PACK_META_CACHE = new Map();
+
+  async function getPackMeta(pack_id, pack_version) {
+    const k = `${pack_id}@${pack_version}`;
+    if (__PACK_META_CACHE.has(k)) return __PACK_META_CACHE.get(k);
+
+    // Worker 已有 /pack/:pack_id/:pack_version
+    const meta = await httpJson(`${apiBase()}/pack/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}`, {
+      method: "GET",
+    });
+
+    __PACK_META_CACHE.set(k, meta);
+    return meta;
+  }
+
+  function extractPickOneKeysFromUiSchema(ui_schema) {
+    // 约定：字段上加 `x_pick_one: true`
+    const keys = [];
+    const groups = ui_schema?.groups || [];
+    for (const g of groups) {
+      const fields = g?.fields || [];
+      for (const f of fields) {
+        if (f && f.x_pick_one === true && typeof f.key === "string") keys.push(f.key);
+      }
+    }
+    return keys;
+  }
+
+  function applyTransformsByUiSchema(ui_schema, payload) {
+    // 这一步先实现为：只有 x_pick_one 才会改动，其余完全不动
+    const out = payload ? JSON.parse(JSON.stringify(payload)) : {};
+    const pickOneKeys = extractPickOneKeysFromUiSchema(ui_schema);
+
+    for (const key of pickOneKeys) {
+      const v = out[key];
+      if (!Array.isArray(v)) continue;
+      if (v.length <= 1) continue;
+
+      // 核心：从多选数组里随机缩成单元素数组（仍保持数组类型，兼容现有 translatePayload 行为）
+      const idx = Math.floor(Math.random() * v.length);
+      out[key] = [v[idx]];
+    }
+    return out;
+  }
+
   /** =====================================================
    * PACK SELECTORS (from /packs/index)
    * ===================================================== */
@@ -485,9 +535,8 @@
     __inFlight.preview = true;
 
     try {
-      const preset_id = getPresetIdStrict();
-      if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-      ensurePresetEnabledForOps();
+            const meta = await getPackMeta(getPackId(), getPackVersion());
+      const payloadPicked = applyTransformsByUiSchema(meta?.ui_schema, currentPreset.payload);
 
       const out = await httpJson(`${apiBase()}/preview`, {
         method: "POST",
@@ -496,7 +545,7 @@
           pack_version: getPackVersion(),
           preset_id,
           stage: currentPreset.stage,
-          payload: currentPreset.payload,
+          payload: payloadPicked,
         }),
       });
 
@@ -544,11 +593,8 @@
     if (btn) btn.disabled = true;
 
     try {
-      const preset_id = getPresetIdStrict();
-      if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-      ensurePresetEnabledForOps();
-
-      setStatus("info", "Generate 中…");
+            const meta = await getPackMeta(getPackId(), getPackVersion());
+      const payloadPicked = applyTransformsByUiSchema(meta?.ui_schema, currentPreset.payload);
 
       const out = await httpJson(`${apiBase()}/generate`, {
         method: "POST",
@@ -557,7 +603,7 @@
           pack_version: getPackVersion(),
           preset_id,
           stage: currentPreset.stage,
-          payload: currentPreset.payload,
+          payload: payloadPicked,
         }),
       });
 
@@ -851,4 +897,5 @@
   }
 
   boot().catch(showError);
+
 })();
