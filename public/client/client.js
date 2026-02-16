@@ -372,63 +372,77 @@
   }
 
   async function decoratePayloadWithStructure({ payload, preset, pack_id, pack_version }) {
-    const packStruct = await fetchPackStructures(pack_id, pack_version);
-    if (!packStruct) return payload;
+  const packStruct = await fetchPackStructures(pack_id, pack_version);
+  if (!packStruct) return payload;
 
-    const injectTarget = packStruct.inject_target || "free_text";
-    const variants = packStruct.variants || {};
-    const defaultWeights = packStruct.default_weights || null;
+  const injectTarget = packStruct.inject_target || "free_text";
+  const variants = packStruct.variants || {};
+  const defaultWeights = packStruct.default_weights || null;
 
-    const levelKey = preset?.level || preset?.preset_level || "L0";
+  const levelKey = preset?.level || preset?.preset_level || "L0";
 
-    // preset 权重优先：preset.meta.structure_weights[levelKey]
-    const presetMeta = (preset && preset.payload && preset.payload.meta) ? preset.payload.meta : null;
-    const presetWeightsRaw =
-      presetMeta?.structure_weights && presetMeta.structure_weights[levelKey]
-        ? presetMeta.structure_weights[levelKey]
-        : null;
+  // 你把权重存进了 preset.payload.meta.structure_weights（来自 D1 presets.payload_json）
+  const presetMeta =
+    preset && preset.payload && preset.payload.meta ? preset.payload.meta : null;
 
-    const weightsNorm = normalizeWeights(presetWeightsRaw) || normalizeWeights(defaultWeights);
-    if (!weightsNorm) return payload;
+  const presetWeightsRaw =
+    presetMeta?.structure_weights && presetMeta.structure_weights[levelKey]
+      ? presetMeta.structure_weights[levelKey]
+      : null;
 
-    const accountId = preset?.account_id || getAccountIdStrict();
-    const presetId = preset?.id || preset?.preset_id || getPresetIdStrict();
+  const weightsNorm = normalizeWeights(presetWeightsRaw) || normalizeWeights(defaultWeights);
+  if (!weightsNorm) return payload;
 
-    const day = todayBucket();
-    const counterKey = `${accountId}|${presetId}|${levelKey}|${day}`;
-    const seq = getLocalCounter(counterKey);
-    const baseSeed = `${accountId}|${presetId}|${levelKey}|${day}|${seq}`;
+  const accountId = preset?.account_id || getAccountIdStrict();
+  const presetId = preset?.id || preset?.preset_id || getPresetIdStrict();
 
-    const historyKey = getStructHistoryKey(accountId, presetId);
-    const lastTwo = getLastTwoFromLS(historyKey);
+  const day = todayBucket();
+  const counterKey = `${accountId}|${presetId}|${levelKey}|${day}`;
+  const seq = getLocalCounter(counterKey);
+  const baseSeed = `${accountId}|${presetId}|${levelKey}|${day}|${seq}`;
 
-    const pickOnce = (suffix) => {
-      const u = hashToUnitInterval(`${baseSeed}${suffix || ""}`);
-      return weightedPick(weightsNorm, u);
-    };
+  const historyKey = getStructHistoryKey(accountId, presetId);
+  const lastTwo = getLastTwoFromLS(historyKey);
 
-    pick = pickOnce("|retry1");
-    if (!pick || !variants[pick]?.block) {
-      const keys = Object.keys(variants);
-      pick = keys.length ? keys[0] : null;
-    }
+  const pickOnce = (suffix) => {
+    const u = hashToUnitInterval(`${baseSeed}${suffix || ""}`);
+    return weightedPick(weightsNorm, u);
+  };
 
-    // 禁止连续 3 次：如果最近两次都是 pick，则重抽一次
-    if (pick && lastTwo.length === 2 && lastTwo[0] === pick && lastTwo[1] === pick) {
-      const retry = pickOnce("|retry1");
-      if (retry && variants[retry]?.block) pick = retry;
-    }
+  // ✅ 必须声明为局部变量，避免污染全局 & 避免和后面 function pick() 冲突
+  let picked = pickOnce("");
 
-    if (pick) {
-      setLastTwoToLS(historyKey, [...lastTwo, pick]);
-    }
+  // fallback：保证 picked 在 variants 里有 block
+  if (!picked || !variants[picked]?.block) {
+    const keys = Object.keys(variants);
+    picked = keys.length ? keys[0] : null;
+  }
 
-    // IMPORTANT: meta 只用于前端选结构，不能发给 Worker（会被 whitelist 拦）
-const nextPayload = { ...payload };
-if (nextPayload && typeof nextPayload === "object" && "meta" in nextPayload) {
-  delete nextPayload.meta;
+  // 禁止连续 3 次：如果最近两次都是 picked，则重抽一次（换 seed 后缀）
+  if (picked && lastTwo.length === 2 && lastTwo[0] === picked && lastTwo[1] === picked) {
+    const retry = pickOnce("|retry1");
+    if (retry && variants[retry]?.block) picked = retry;
+  }
+
+  if (picked) setLastTwoToLS(historyKey, [...lastTwo, picked]);
+
+  const structureBlock = picked && variants[picked]?.block ? String(variants[picked].block) : "";
+  const userNote = (payload && payload[injectTarget]) != null ? String(payload[injectTarget]) : "";
+
+  // IMPORTANT: meta 只用于前端选结构，不能发给 Worker（会被 whitelist 拦）
+  const nextPayload = { ...(payload || {}) };
+  if (nextPayload && typeof nextPayload === "object" && "meta" in nextPayload) {
+    delete nextPayload.meta;
+  }
+
+  // ✅ 注入结构文本（无标签）
+  const injected = buildInjectedFreeText(structureBlock, userNote);
+
+  // 如果 injected 为空，不覆盖用户输入
+  if (injected) nextPayload[injectTarget] = injected;
+
+  return nextPayload;
 }
-
 
   /** =====================================================
    * PACK SELECTORS (from /packs/index)
@@ -1073,6 +1087,7 @@ if (nextPayload && typeof nextPayload === "object" && "meta" in nextPayload) {
 
   boot().catch(showError);
 })();
+
 
 
 
