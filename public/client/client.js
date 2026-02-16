@@ -530,12 +530,16 @@
     await presetRefreshList();
   }
 
-  async function previewPrompt() {
+    async function previewPrompt() {
     if (__inFlight.preview) return;
     __inFlight.preview = true;
 
     try {
-            const meta = await getPackMeta(getPackId(), getPackVersion());
+      const preset_id = getPresetIdStrict(); // ✅ 新增：定义 preset_id
+      if (!currentPreset || currentPreset.id !== preset_id) await presetLoad(); // ✅ 确保 currentPreset 已加载
+      ensurePresetEnabledForOps(); // ✅ 可选：防淘汰角色继续操作
+
+      const meta = await getPackMeta(getPackId(), getPackVersion());
       const payloadPicked = applyTransformsByUiSchema(meta?.ui_schema, currentPreset.payload);
 
       const out = await httpJson(`${apiBase()}/preview`, {
@@ -585,7 +589,7 @@
     return `标题：${title}\n副标题：${subtitle}\n--------\n正文：\n${content}\n--------\n标签：${tags}`;
   }
 
-  async function generateContent() {
+    async function generateContent() {
     if (__inFlight.generate) return;
     __inFlight.generate = true;
 
@@ -593,7 +597,11 @@
     if (btn) btn.disabled = true;
 
     try {
-            const meta = await getPackMeta(getPackId(), getPackVersion());
+      const preset_id = getPresetIdStrict(); // ✅ 新增：定义 preset_id
+      if (!currentPreset || currentPreset.id !== preset_id) await presetLoad(); // ✅ 确保 currentPreset 已加载
+      ensurePresetEnabledForOps(); // ✅ 可选：防淘汰角色继续操作
+
+      const meta = await getPackMeta(getPackId(), getPackVersion());
       const payloadPicked = applyTransformsByUiSchema(meta?.ui_schema, currentPreset.payload);
 
       const out = await httpJson(`${apiBase()}/generate`, {
@@ -899,3 +907,4 @@
   boot().catch(showError);
 
 })();
+
