@@ -381,8 +381,8 @@
 
   const levelKey = preset?.level || preset?.preset_level || "L0";
 
-  // 你把权重存进了 preset.payload.meta.structure_weights（来自 D1 presets.payload_json）
-  const presetMeta = preset?.meta || null;
+  // 兼容两种写法：优先读 preset.payload.meta（你的 D1 payload_json 就是它）
+  const presetMeta = preset?.payload?.meta || preset?.meta || null;
 
   const presetWeightsRaw =
     presetMeta?.structure_weights && presetMeta.structure_weights[levelKey]
@@ -724,7 +724,11 @@
         pack_version,
       });
 
-      decoratedPayload.batch_size = "1";
+      // 保持与 preset.payload.batch_size 一致（你 payload 里是字符串）
+    const nRaw = currentPreset?.payload?.batch_size ?? "1";
+    const n = Math.max(1, parseInt(String(nRaw), 10) || 1);
+    decoratedPayload.batch_size = String(n);
+
 
       const out = await httpJson(`${apiBase()}/preview`, {
         method: "POST",
@@ -809,40 +813,37 @@ function joinBatchOutputs(outs) {
     const nRaw = currentPreset?.payload?.batch_size ?? "1";
     const n = Math.max(1, parseInt(String(nRaw), 10) || 1);
 
-    // 强制每次请求 batch_size=1，确保每条都会重新 pick 结构
-    const payloadBase = { ...(currentPreset.payload || {}), batch_size: "1" };
+    // 读取 batch_size（注意：你 payload 里是字符串）
+const nRaw = currentPreset?.payload?.batch_size ?? "1";
+const n = Math.max(1, parseInt(String(nRaw), 10) || 1);
 
-    const outs = [];
-    for (let i = 0; i < n; i++) {
-      const decoratedPayload = await decoratePayloadWithStructure({
-        payload: payloadBase,
-        preset: currentPreset,
-        pack_id,
-        pack_version,
-      });
+// 单次请求：把 batch_size 原样带给 Worker
+const payloadBase = { ...(currentPreset.payload || {}), batch_size: String(n) };
 
-      const out = await httpJson(`${apiBase()}/generate`, {
-        method: "POST",
-        body: JSON.stringify({
-          pack_id,
-          pack_version,
-          preset_id,
-          stage: currentPreset.stage,
-          payload: decoratedPayload,
-        }),
-      });
+const decoratedPayload = await decoratePayloadWithStructure({
+  payload: payloadBase,
+  preset: currentPreset,
+  pack_id,
+  pack_version,
+});
 
-      outs.push(out);
-    }
+const out = await httpJson(`${apiBase()}/generate`, {
+  method: "POST",
+  body: JSON.stringify({
+    pack_id,
+    pack_version,
+    preset_id,
+    stage: currentPreset.stage,
+    payload: decoratedPayload,
+  }),
+});
 
-    // raw：展示数组（便于你 debug 每条的 job_id / output）
-    setPre("genRaw", outs);
+// 统一保持原 UI 结构：genRaw 仍然是数组，方便你 debug
+const outs = [out];
+setPre("genRaw", outs);
+setPre("genText", joinBatchOutputs(outs));
 
-    // text：合并展示
-    setPre("genText", joinBatchOutputs(outs));
-
-    const jobIds = outs.map((x) => x?.job_id).filter(Boolean);
-    setStatus("ok", `Generate 完成：${outs.length} 条；job_id=${jobIds.join(",") || "na"}`);
+setStatus("ok", `Generate 完成：${n} 条（单次请求）；job_id=${out?.job_id || "na"}`);
   } finally {
     __inFlight.generate = false;
     if (btn) btn.disabled = false;
@@ -1123,6 +1124,7 @@ function joinBatchOutputs(outs) {
 
   boot().catch(showError);
 })();
+
 
 
 
