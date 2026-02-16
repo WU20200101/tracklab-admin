@@ -347,14 +347,11 @@
     const publicBase =
       (idx && idx.public_base && String(idx.public_base).trim().replace(/\/+$/, "")) || "";
 
-    const tryUrls = [];
-    if (publicBase) {
-      // 约定：publicBase/<pack_id>/<pack_version>/prompt/structures.json
-      tryUrls.push(`${publicBase}/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}/prompt/structures.json`);
-    }
-    // 兜底：有些实现会把 pack 静态文件挂在 API 下
-    tryUrls.push(`${apiBase()}/packs/public/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}/prompt/structures.json`);
-    tryUrls.push(`${apiBase()}/packs/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}/prompt/structures.json`);
+    const tryUrls = [
+  // 新增：直接命中 Worker 透传路径（这是现在唯一可用路径）
+  `${apiBase()}/pack/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}/prompt/structures.json`,
+];
+
 
     for (const url of tryUrls) {
       try {
@@ -1079,4 +1076,5 @@
 
   boot().catch(showError);
 })();
+
 
