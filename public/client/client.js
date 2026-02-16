@@ -229,6 +229,213 @@
     if (el && !el.value) el.value = todayYMD();
   }
 
+    /** =====================================================
+   * STRUCTURE VARIANTS DECORATOR (pack-agnostic, no Worker change)
+   * ===================================================== */
+  const STRUCT_HISTORY_KEY_PREFIX = "structure_hist:";
+
+  function getStructHistoryKey(accountId, presetId) {
+    return `${STRUCT_HISTORY_KEY_PREFIX}${accountId || "na"}:${presetId || "na"}`;
+  }
+
+  function getLastTwoFromLS(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.slice(-2) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function setLastTwoToLS(key, arr) {
+    try {
+      localStorage.setItem(key, JSON.stringify((arr || []).slice(-2)));
+    } catch {}
+  }
+
+  function getLocalCounter(key) {
+    const k = `structure_ctr:${key}`;
+    try {
+      const raw = localStorage.getItem(k);
+      const n = raw ? parseInt(raw, 10) : 0;
+      const next = Number.isFinite(n) ? n + 1 : 1;
+      localStorage.setItem(k, String(next));
+      return next;
+    } catch {
+      return 1;
+    }
+  }
+
+  function todayBucket() {
+    // YYYY-MM-DD
+    return todayYMD();
+  }
+
+  // FNV-1a 32-bit
+  function hash32FNV1a(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return h >>> 0;
+  }
+
+  function hashToUnitInterval(seedStr) {
+    return hash32FNV1a(seedStr) / 4294967296;
+  }
+
+  function normalizeWeights(weightsRaw) {
+    if (!weightsRaw || typeof weightsRaw !== "object") return null;
+    const out = {};
+    let sum = 0;
+
+    for (const [k, v] of Object.entries(weightsRaw)) {
+      const num = typeof v === "number" ? v : parseFloat(v);
+      if (Number.isFinite(num) && num > 0) {
+        out[k] = num;
+        sum += num;
+      }
+    }
+    if (sum <= 0) return null;
+
+    for (const k of Object.keys(out)) out[k] = out[k] / sum;
+
+    // fix floating diff by adjusting the max key
+    let s2 = 0;
+    let maxK = null;
+    let maxV = -Infinity;
+    for (const [k, v] of Object.entries(out)) {
+      s2 += v;
+      if (v > maxV) {
+        maxV = v;
+        maxK = k;
+      }
+    }
+    const diff = 1 - s2;
+    if (maxK) out[maxK] = out[maxK] + diff;
+
+    return out;
+  }
+
+  function weightedPick(weightsNorm, u01) {
+    const entries = Object.entries(weightsNorm).sort((a, b) => a[0].localeCompare(b[0]));
+    let acc = 0;
+    for (const [k, w] of entries) {
+      acc += w;
+      if (u01 < acc) return k;
+    }
+    return entries.length ? entries[entries.length - 1][0] : null;
+  }
+
+  function buildInjectedFreeText(structureBlock, userNote) {
+    const s = (structureBlock || "").trim();
+    const note = (userNote || "").trim();
+    if (!s && !note) return "";
+    if (s && !note) return `【表达偏好】\n${s}\n`;
+    if (!s && note) return note;
+    return `【表达偏好】\n${s}\n\n【补充备注】\n${note}\n`;
+  }
+
+  async function fetchPackStructures(pack_id, pack_version) {
+    // 用 /packs/index 来发现可用的 public_base（如果 index 没给，就先按约定路径尝试）
+    const idx = await httpJson(`${apiBase()}/packs/index`, { method: "GET" });
+
+    // 推荐：worker 的 index.json 若提供 public_base（例如 https://.../tracklab-packs），则用它
+    const publicBase =
+      (idx && idx.public_base && String(idx.public_base).trim().replace(/\/+$/, "")) || "";
+
+    const tryUrls = [];
+    if (publicBase) {
+      // 约定：publicBase/<pack_id>/<pack_version>/prompt/structures.json
+      tryUrls.push(`${publicBase}/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}/prompt/structures.json`);
+    }
+    // 兜底：有些实现会把 pack 静态文件挂在 API 下
+    tryUrls.push(`${apiBase()}/packs/public/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}/prompt/structures.json`);
+    tryUrls.push(`${apiBase()}/packs/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}/prompt/structures.json`);
+
+    for (const url of tryUrls) {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) continue;
+        const json = await res.json();
+        if (!json || json.enabled !== true) continue;
+        if (!json.variants || !json.inject_target) continue;
+        return json;
+      } catch {
+        // continue
+      }
+    }
+    return null;
+  }
+
+  async function decoratePayloadWithStructure({ payload, preset, pack_id, pack_version }) {
+    const packStruct = await fetchPackStructures(pack_id, pack_version);
+    if (!packStruct) return payload;
+
+    const injectTarget = packStruct.inject_target || "free_text";
+    const variants = packStruct.variants || {};
+    const defaultWeights = packStruct.default_weights || null;
+
+    const levelKey = preset?.level || preset?.preset_level || "L0";
+
+    // preset 权重优先：preset.meta.structure_weights[levelKey]
+    const presetMeta = preset?.meta || payload?.meta || null;
+    const presetWeightsRaw =
+      presetMeta?.structure_weights && presetMeta.structure_weights[levelKey]
+        ? presetMeta.structure_weights[levelKey]
+        : null;
+
+    const weightsNorm = normalizeWeights(presetWeightsRaw) || normalizeWeights(defaultWeights);
+    if (!weightsNorm) return payload;
+
+    const accountId = preset?.account_id || getAccountIdStrict();
+    const presetId = preset?.id || preset?.preset_id || getPresetIdStrict();
+
+    const day = todayBucket();
+    const counterKey = `${accountId}|${presetId}|${levelKey}|${day}`;
+    const seq = getLocalCounter(counterKey);
+    const baseSeed = `${accountId}|${presetId}|${levelKey}|${day}|${seq}`;
+
+    const historyKey = getStructHistoryKey(accountId, presetId);
+    const lastTwo = getLastTwoFromLS(historyKey);
+
+    const pickOnce = (suffix) => {
+      const u = hashToUnitInterval(`${baseSeed}${suffix || ""}`);
+      return weightedPick(weightsNorm, u);
+    };
+
+    let pick = pickOnce("");
+    if (!pick || !variants[pick]?.block) {
+      const keys = Object.keys(variants);
+      pick = keys.length ? keys[0] : null;
+    }
+
+    // 禁止连续 3 次：如果最近两次都是 pick，则重抽一次
+    if (pick && lastTwo.length === 2 && lastTwo[0] === pick && lastTwo[1] === pick) {
+      const retry = pickOnce("|retry1");
+      if (retry && variants[retry]?.block) pick = retry;
+    }
+
+    if (pick) {
+      setLastTwoToLS(historyKey, [...lastTwo, pick]);
+    }
+
+    const nextPayload = { ...payload };
+    const original = nextPayload[injectTarget] || "";
+    const structureBlock = pick && variants[pick] ? variants[pick].block : "";
+    nextPayload[injectTarget] = buildInjectedFreeText(structureBlock, original);
+
+    nextPayload.meta = { ...(nextPayload.meta || {}) };
+    nextPayload.meta.structure_id = pick || null;
+    nextPayload.meta.structure_level = levelKey;
+    nextPayload.meta.structure_day = day;
+
+    return nextPayload;
+  }
+
   /** =====================================================
    * PACK SELECTORS (from /packs/index)
    * ===================================================== */
@@ -489,14 +696,24 @@
       if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
       ensurePresetEnabledForOps();
 
+            const pack_id = getPackId();
+      const pack_version = getPackVersion();
+
+      const decoratedPayload = await decoratePayloadWithStructure({
+        payload: currentPreset.payload,
+        preset: currentPreset,
+        pack_id,
+        pack_version,
+      });
+
       const out = await httpJson(`${apiBase()}/preview`, {
         method: "POST",
         body: JSON.stringify({
-          pack_id: getPackId(),
-          pack_version: getPackVersion(),
+          pack_id,
+          pack_version,
           preset_id,
           stage: currentPreset.stage,
-          payload: currentPreset.payload,
+          payload: decoratedPayload,
         }),
       });
 
@@ -550,14 +767,24 @@
 
       setStatus("info", "Generate 中…");
 
+            const pack_id = getPackId();
+      const pack_version = getPackVersion();
+
+      const decoratedPayload = await decoratePayloadWithStructure({
+        payload: currentPreset.payload,
+        preset: currentPreset,
+        pack_id,
+        pack_version,
+      });
+
       const out = await httpJson(`${apiBase()}/generate`, {
         method: "POST",
         body: JSON.stringify({
-          pack_id: getPackId(),
-          pack_version: getPackVersion(),
+          pack_id,
+          pack_version,
           preset_id,
           stage: currentPreset.stage,
-          payload: currentPreset.payload,
+          payload: decoratedPayload,
         }),
       });
 
@@ -852,3 +1079,4 @@
 
   boot().catch(showError);
 })();
+
