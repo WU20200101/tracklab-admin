@@ -229,220 +229,6 @@
     if (el && !el.value) el.value = todayYMD();
   }
 
-    /** =====================================================
-   * STRUCTURE VARIANTS DECORATOR (pack-agnostic, no Worker change)
-   * ===================================================== */
-  const STRUCT_HISTORY_KEY_PREFIX = "structure_hist:";
-
-  function getStructHistoryKey(accountId, presetId) {
-    return `${STRUCT_HISTORY_KEY_PREFIX}${accountId || "na"}:${presetId || "na"}`;
-  }
-
-  function getLastTwoFromLS(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return [];
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr.slice(-2) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function setLastTwoToLS(key, arr) {
-    try {
-      localStorage.setItem(key, JSON.stringify((arr || []).slice(-2)));
-    } catch {}
-  }
-
-  function getLocalCounter(key) {
-    const k = `structure_ctr:${key}`;
-    try {
-      const raw = localStorage.getItem(k);
-      const n = raw ? parseInt(raw, 10) : 0;
-      const next = Number.isFinite(n) ? n + 1 : 1;
-      localStorage.setItem(k, String(next));
-      return next;
-    } catch {
-      return 1;
-    }
-  }
-
-  function todayBucket() {
-    // YYYY-MM-DD
-    return todayYMD();
-  }
-
-  // FNV-1a 32-bit
-  function hash32FNV1a(str) {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < str.length; i++) {
-      h ^= str.charCodeAt(i);
-      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
-    }
-    return h >>> 0;
-  }
-
-  function hashToUnitInterval(seedStr) {
-    return hash32FNV1a(seedStr) / 4294967296;
-  }
-
-  function normalizeWeights(weightsRaw) {
-    if (!weightsRaw || typeof weightsRaw !== "object") return null;
-    const out = {};
-    let sum = 0;
-
-    for (const [k, v] of Object.entries(weightsRaw)) {
-      const num = typeof v === "number" ? v : parseFloat(v);
-      if (Number.isFinite(num) && num > 0) {
-        out[k] = num;
-        sum += num;
-      }
-    }
-    if (sum <= 0) return null;
-
-    for (const k of Object.keys(out)) out[k] = out[k] / sum;
-
-    // fix floating diff by adjusting the max key
-    let s2 = 0;
-    let maxK = null;
-    let maxV = -Infinity;
-    for (const [k, v] of Object.entries(out)) {
-      s2 += v;
-      if (v > maxV) {
-        maxV = v;
-        maxK = k;
-      }
-    }
-    const diff = 1 - s2;
-    if (maxK) out[maxK] = out[maxK] + diff;
-
-    return out;
-  }
-
-  function weightedPick(weightsNorm, u01) {
-    const entries = Object.entries(weightsNorm).sort((a, b) => a[0].localeCompare(b[0]));
-    let acc = 0;
-    for (const [k, w] of entries) {
-      acc += w;
-      if (u01 < acc) return k;
-    }
-    return entries.length ? entries[entries.length - 1][0] : null;
-  }
-
-  function buildInjectedFreeText(structureBlock, userNote) {
-  const s = (structureBlock || "").trim();
-  const note = (userNote || "").trim();
-
-  if (!s && !note) return "";
-  if (s && !note) return `${s}\n`;
-  if (!s && note) return note;
-
-  // 仍保留分层，但不使用显眼标签；用空行做弱分隔
-  return `${s}\n\n${note}\n`;
-}
-
-  async function fetchPackStructures(pack_id, pack_version) {
-    // 用 /packs/index 来发现可用的 public_base（如果 index 没给，就先按约定路径尝试）
-    const idx = await httpJson(`${apiBase()}/packs/index`, { method: "GET" });
-
-    // 推荐：worker 的 index.json 若提供 public_base（例如 https://.../tracklab-packs），则用它
-    const publicBase =
-      (idx && idx.public_base && String(idx.public_base).trim().replace(/\/+$/, "")) || "";
-
-    const tryUrls = [
-  // 新增：直接命中 Worker 透传路径（这是现在唯一可用路径）
-  `${apiBase()}/pack/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}/prompt/structures.json`,
-];
-
-
-    for (const url of tryUrls) {
-      try {
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) continue;
-        const json = await res.json();
-        if (!json || json.enabled !== true) continue;
-        if (!json.variants || !json.inject_target) continue;
-        return json;
-      } catch {
-        // continue
-      }
-    }
-    return null;
-  }
-
-  async function decoratePayloadWithStructure({ payload, preset, pack_id, pack_version }) {
-  const packStruct = await fetchPackStructures(pack_id, pack_version);
-  if (!packStruct) return payload;
-
-  const injectTarget = packStruct.inject_target || "free_text";
-  const variants = packStruct.variants || {};
-  const defaultWeights = packStruct.default_weights || null;
-
-  const levelKey = preset?.level || preset?.preset_level || "L0";
-
-  // 兼容两种写法：优先读 preset.payload.meta（你的 D1 payload_json 就是它）
-  const presetMeta = preset?.payload?.meta || preset?.meta || null;
-
-  const presetWeightsRaw =
-    presetMeta?.structure_weights && presetMeta.structure_weights[levelKey]
-      ? presetMeta.structure_weights[levelKey]
-      : null;
-
-  const weightsNorm = normalizeWeights(presetWeightsRaw) || normalizeWeights(defaultWeights);
-  if (!weightsNorm) return payload;
-
-  const accountId = preset?.account_id || getAccountIdStrict();
-  const presetId = preset?.id || preset?.preset_id || getPresetIdStrict();
-
-  const day = todayBucket();
-  const counterKey = `${accountId}|${presetId}|${levelKey}|${day}`;
-  const seq = getLocalCounter(counterKey);
-  const baseSeed = `${accountId}|${presetId}|${levelKey}|${day}|${seq}`;
-
-  const historyKey = getStructHistoryKey(accountId, presetId);
-  const lastTwo = getLastTwoFromLS(historyKey);
-
-  const pickOnce = (suffix) => {
-    const u = hashToUnitInterval(`${baseSeed}${suffix || ""}`);
-    return weightedPick(weightsNorm, u);
-  };
-
-  // ✅ 必须声明为局部变量，避免污染全局 & 避免和后面 function pick() 冲突
-  let picked = pickOnce("");
-
-  // fallback：保证 picked 在 variants 里有 block
-  if (!picked || !variants[picked]?.block) {
-    const keys = Object.keys(variants);
-    picked = keys.length ? keys[0] : null;
-  }
-
-  // 禁止连续 3 次：如果最近两次都是 picked，则重抽一次（换 seed 后缀）
-  if (picked && lastTwo.length === 2 && lastTwo[0] === picked && lastTwo[1] === picked) {
-    const retry = pickOnce("|retry1");
-    if (retry && variants[retry]?.block) picked = retry;
-  }
-
-  if (picked) setLastTwoToLS(historyKey, [...lastTwo, picked]);
-
-  const structureBlock = picked && variants[picked]?.block ? String(variants[picked].block) : "";
-  const userNote = (payload && payload[injectTarget]) != null ? String(payload[injectTarget]) : "";
-
-  // IMPORTANT: meta 只用于前端选结构，不能发给 Worker（会被 whitelist 拦）
-  const nextPayload = { ...(payload || {}) };
-  if (nextPayload && typeof nextPayload === "object" && "meta" in nextPayload) {
-    delete nextPayload.meta;
-  }
-
-  // ✅ 注入结构文本（无标签）
-  const injected = buildInjectedFreeText(structureBlock, userNote);
-
-  // 如果 injected 为空，不覆盖用户输入
-  if (injected) nextPayload[injectTarget] = injected;
-
-  return nextPayload;
-}
-
   /** =====================================================
    * PACK SELECTORS (from /packs/index)
    * ===================================================== */
@@ -632,17 +418,6 @@
     if (!out.item) throw new Error("preset_get 返回为空");
 
     currentPreset = out.item;
-    
-        // ====== IMPORTANT: 将 payload.meta 迁出，避免发给 Worker 触发 whitelist ======
-    if (currentPreset && currentPreset.payload && typeof currentPreset.payload === "object") {
-      if ("meta" in currentPreset.payload && currentPreset.payload.meta) {
-        // 把权重/配置保留在 preset.meta（不进入 payload）
-        currentPreset.meta = { ...(currentPreset.meta || {}), ...(currentPreset.payload.meta || {}) };
-        // 从 payload 中剥离 meta，保证 /preview /generate 永远不会携带 meta
-        delete currentPreset.payload.meta;
-      }
-    }
-
     setPre("presetOut", out.item);
     setStatus("ok", `Preset 已加载：${out.item.name || out.item.id}`);
     applyEnabledUi(out.item.enabled);
@@ -714,30 +489,14 @@
       if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
       ensurePresetEnabledForOps();
 
-            const pack_id = getPackId();
-      const pack_version = getPackVersion();
-
-      const decoratedPayload = await decoratePayloadWithStructure({
-        payload: currentPreset.payload,
-        preset: currentPreset,
-        pack_id,
-        pack_version,
-      });
-
-      // 保持与 preset.payload.batch_size 一致（你 payload 里是字符串）
-    const nRaw = currentPreset?.payload?.batch_size ?? "1";
-    const n = Math.max(1, parseInt(String(nRaw), 10) || 1);
-    decoratedPayload.batch_size = String(n);
-
-
       const out = await httpJson(`${apiBase()}/preview`, {
         method: "POST",
         body: JSON.stringify({
-          pack_id,
-          pack_version,
+          pack_id: getPackId(),
+          pack_version: getPackVersion(),
           preset_id,
           stage: currentPreset.stage,
-          payload: decoratedPayload,
+          payload: currentPreset.payload,
         }),
       });
 
@@ -777,74 +536,47 @@
     return `标题：${title}\n副标题：${subtitle}\n--------\n正文：\n${content}\n--------\n标签：${tags}`;
   }
 
-  function extractDisplayTextFromGenerate(out) {
-  const text = out?.output_text || out?.outputText;
-  if (typeof text === "string" && text.trim()) return text.trim();
-
-  const outputObj = out?.output || out?.output_json || {};
-  if (typeof outputObj === "string") return outputObj.trim();
-  return JSON.stringify(outputObj, null, 2);
-}
-
-function joinBatchOutputs(outs) {
-  return (outs || [])
-    .map((o, i) => `--- 第 ${i + 1} 条 ---\n${extractDisplayTextFromGenerate(o)}`)
-    .join("\n\n");
-}
-
   async function generateContent() {
-  if (__inFlight.generate) return;
-  __inFlight.generate = true;
+    if (__inFlight.generate) return;
+    __inFlight.generate = true;
 
-  const btn = document.getElementById("btnGenerate");
-  if (btn) btn.disabled = true;
+    const btn = document.getElementById("btnGenerate");
+    if (btn) btn.disabled = true;
 
-  try {
-    const preset_id = getPresetIdStrict();
-    if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-    ensurePresetEnabledForOps();
+    try {
+      const preset_id = getPresetIdStrict();
+      if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
+      ensurePresetEnabledForOps();
 
-    setStatus("info", "Generate 中…");
+      setStatus("info", "Generate 中…");
 
-    const pack_id = getPackId();
-    const pack_version = getPackVersion();
+      const out = await httpJson(`${apiBase()}/generate`, {
+        method: "POST",
+        body: JSON.stringify({
+          pack_id: getPackId(),
+          pack_version: getPackVersion(),
+          preset_id,
+          stage: currentPreset.stage,
+          payload: currentPreset.payload,
+        }),
+      });
 
-    // 读取 batch_size（注意：你 payload 里是字符串）
-const nRaw = currentPreset?.payload?.batch_size ?? "1";
-const n = Math.max(1, parseInt(String(nRaw), 10) || 1);
+      setPre("genRaw", out);
 
-// 单次请求：把 batch_size 原样带给 Worker
-const payloadBase = { ...(currentPreset.payload || {}), batch_size: String(n) };
+      const text = out.output_text || out.outputText;
+      if (typeof text === "string" && text.trim()) {
+        setPre("genText", text);
+      } else {
+        const outputObj = out.output || out.output_json || {};
+        setPre("genText", typeof outputObj === "string" ? outputObj : JSON.stringify(outputObj, null, 2));
+      }
 
-const decoratedPayload = await decoratePayloadWithStructure({
-  payload: payloadBase,
-  preset: currentPreset,
-  pack_id,
-  pack_version,
-});
-
-const out = await httpJson(`${apiBase()}/generate`, {
-  method: "POST",
-  body: JSON.stringify({
-    pack_id,
-    pack_version,
-    preset_id,
-    stage: currentPreset.stage,
-    payload: decoratedPayload,
-  }),
-});
-
-// 统一保持原 UI 结构：genRaw 仍然是数组，方便你 debug
-const outs = [out];
-setPre("genRaw", outs);
-setPre("genText", joinBatchOutputs(outs));
-
-setStatus("ok", `Generate 完成：${n} 条（单次请求）；job_id=${out?.job_id || "na"}`);
-  } finally {
-    __inFlight.generate = false;
-    if (btn) btn.disabled = false;
+      setStatus("ok", `Generate 完成：job_id=${out?.job_id || "na"}`);
+    } finally {
+      __inFlight.generate = false;
+      if (btn) btn.disabled = false;
+    }
   }
-}
 
   function readNonNegInt(id) {
     const v = ($(id)?.value ?? "").toString().trim();
@@ -1120,16 +852,3 @@ setStatus("ok", `Generate 完成：${n} 条（单次请求）；job_id=${out?.jo
 
   boot().catch(showError);
 })();
-
-
-
-
-
-
-
-
-
-
-
-
-
