@@ -724,6 +724,8 @@
         pack_version,
       });
 
+      decoratedPayload.batch_size = "1";
+
       const out = await httpJson(`${apiBase()}/preview`, {
         method: "POST",
         body: JSON.stringify({
@@ -1121,6 +1123,7 @@ function joinBatchOutputs(outs) {
 
   boot().catch(showError);
 })();
+
 
 
 
