@@ -1,5 +1,5 @@
-/* TrackLab Outcomes (Refactor v2026-02-11)
- * - 基于你提供的“上一版 outcomes.js”（不在你已改乱的版本上继续叠）
+/* TrackLab Client (Refactor v2026-02-11)
+ * - 基于你提供的“上一版 client.js”（不在你已改乱的版本上继续叠）
  * - 新增：从 GitHub Pages 根目录读取 config.json 自动设置 apiBase
  * - 新增：从 Worker 的 /packs/index 拉取 packId / packVersion 下拉选项（默认值由 index.json 决定）
  * - 保持：原有业务流程与接口调用逻辑不变（owner -> accounts -> presets -> preview/generate/feedback/outcome/stats）
