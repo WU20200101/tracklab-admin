@@ -557,6 +557,22 @@
           setControlDisabled(input, !isEditable);
         }
 
+        // ✅ 永久冻结：升级/作废规则（stage_rules_ref）在 form 页任何阶段都不可改
+const isStageRulesRef = key === "stage_rules_ref";
+if (isStageRulesRef) {
+  setControlDisabled(input, true);
+} else {
+  // 原有逻辑不变
+  const topicSelectorKey = manifest?.topic?.selector_field; // e.g. "topic_bank"
+  const isTopicSelector = topicSelectorKey && key === topicSelectorKey;
+
+  if (isTopicSelector && currentPreset?.id) {
+    setControlDisabled(input, true);
+  } else {
+    setControlDisabled(input, !isEditable);
+  }
+}
+
         wrap.appendChild(input);
 
         if (f.help) {
@@ -758,6 +774,7 @@
     if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
   }
 })();
+
 
 
 
