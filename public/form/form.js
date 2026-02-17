@@ -524,38 +524,74 @@
       }</div>`;
       box.appendChild(head);
 
-      for (const f of groups.get(st) || []) {
-        const key = f.key;
-        const label = f.label || key;
+      const list = groups.get(st) || [];
 
-        const isEditable =
-          Array.isArray(f.editable_stages) &&
-          f.editable_stages.includes(currentStage) &&
-          Number(currentPreset.enabled) === 1;
+      // stage 内按 schema 的 groups 分组展示（讨论范围/表达状态/限制条件）
+      const byGroup = new Map();
+      for (const f of list) {
+        const gname = (f.__group || "").trim() || "未分组";
+        if (!byGroup.has(gname)) byGroup.set(gname, []);
+        byGroup.get(gname).push(f);
+      }
 
-        const wrap = document.createElement("div");
-        wrap.style.marginBottom = "10px";
+      for (const [gname, gfields] of byGroup.entries()) {
+        // 渲染 group 标题
+        const ghead = document.createElement("div");
+        ghead.className = "grouphead";
+        ghead.textContent = gname;
+        box.appendChild(ghead);
 
-        const lab = document.createElement("label");
-        const required =
-          Array.isArray(f.required_stages) && f.required_stages.includes(currentStage);
-        lab.textContent = label + (required ? " *" : "");
-        wrap.appendChild(lab);
+        // 渲染 group 内字段（保留你原来的字段渲染逻辑）
+        for (const f of gfields) {
+          const key = f.key;
+          const label = f.label || key;
 
-        const input = buildInputForField(f, currentPayload?.[key]);
-        input.id = `fld__${key}`;
-        setControlDisabled(input, !isEditable);
+          const isEditable =
+            Array.isArray(f.editable_stages) &&
+            f.editable_stages.includes(currentStage) &&
+            Number(currentPreset.enabled) === 1;
 
-                // ✅ topic_bank：更新/升级页“可见但不可改”
-        const topicSelectorKey = manifest?.topic?.selector_field; // e.g. "topic_bank"
-        const isTopicSelector = topicSelectorKey && key === topicSelectorKey;
+          const wrap = document.createElement("div");
+          wrap.style.marginBottom = "10px";
 
-        // 已加载 preset（=更新/升级场景）时，一律锁死 topic_bank
-        if (isTopicSelector && currentPreset?.id) {
-          setControlDisabled(input, true);
-        } else {
-          setControlDisabled(input, !isEditable);
+          const lab = document.createElement("label");
+          const required =
+            Array.isArray(f.required_stages) && f.required_stages.includes(currentStage);
+          lab.textContent = label + (required ? " *" : "");
+          wrap.appendChild(lab);
+
+          const input = buildInputForField(f, currentPayload?.[key]);
+          input.id = `fld__${key}`;
+
+          // ✅ 永久冻结：升级/作废规则（stage_rules_ref）在 form 页任何阶段都不可改
+          const isStageRulesRef = key === "stage_rules_ref";
+          if (isStageRulesRef) {
+            setControlDisabled(input, true);
+          } else {
+            // ✅ topic_bank：更新/升级页“可见但不可改”
+            const topicSelectorKey = manifest?.topic?.selector_field; // e.g. "topic_bank"
+            const isTopicSelector = topicSelectorKey && key === topicSelectorKey;
+
+            if (isTopicSelector && currentPreset?.id) {
+              setControlDisabled(input, true);
+            } else {
+              setControlDisabled(input, !isEditable);
+            }
+          }
+
+          wrap.appendChild(input);
+
+          if (f.help) {
+            const help = document.createElement("div");
+            help.className = "stagehint";
+            help.textContent = f.help;
+            wrap.appendChild(help);
+          }
+
+          box.appendChild(wrap);
         }
+      }
+
 
         // ✅ 永久冻结：升级/作废规则（stage_rules_ref）在 form 页任何阶段都不可改
 const isStageRulesRef = key === "stage_rules_ref";
@@ -774,6 +810,7 @@ if (isStageRulesRef) {
     if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
   }
 })();
+
 
 
 
