@@ -357,22 +357,60 @@
       __inFlight = { preview: false, generate: false };
     }
 
-    // 绑定变化：切 pack → 重建版本列表 + 清空下游
+    // ===== 新增：统一清空（让 client 行为像 form：切 pack/版本后全部归零）=====
+    function resetAllUIForPackOrVersionChange() {
+      // 1) 清空用户名（你截图里就是这里没清）
+      const ownerSel = $("ownerId");
+      if (ownerSel) ownerSel.value = "";
+
+      // 2) 清空账号/角色下拉与相关输出
+      clearAccountsUI();
+      clearPresetsUI();
+
+      // 3) 清空所有输出面板（脚本预览/内容生成/反馈评价等）
+      setPre("accountOut", null);
+      setPre("presetOut", null);
+      setPre("previewOut", null);
+      setPre("genRaw", null);
+      setPre("genText", null);
+      setPre("evalOut", null);
+      setPre("outcomeOut", null);
+      setPre("statsOut", null);
+
+      // 4) 清空反馈表单（除了日期）
+const idsToClear = [
+  "fbPosts",
+  "fbViews",
+  "fbLikes",
+  "fbSaves",
+  "fbComments",
+  "fbDmInbound",
+  "fbNote",
+];
+idsToClear.forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.value = "";
+});
+
+// 日期默认今天
+const fbDate = $("fbDate");
+if (fbDate) fbDate.valueAsDate = new Date();
+
+    }
+
+    // 绑定变化：切 pack
     packSel.addEventListener("change", () => {
       renderVersionsFor(packSel.value);
-
-      // ✅ 像 form 一样：切 pack 直接清空所有下游状态
-      resetClientStateForPackOrVersionChange();
-
+      resetAllUIForPackOrVersionChange();
       setStatus("info", "pack 已切换：请重新选择用户名/账号/角色");
     });
 
-    // ✅ 新增：切版本也要清空（你现在缺的就是这个）
+    // ✅ 新增：切版本也要清空（你现在缺这个）
     verSel.addEventListener("change", () => {
-      resetClientStateForPackOrVersionChange();
+      resetAllUIForPackOrVersionChange();
       setStatus("info", "版本已切换：请重新选择用户名/账号/角色");
     });
-
   }
 
   /** =====================================================
@@ -941,6 +979,8 @@
   boot().catch(showError);
 
 })();
+
+
 
 
 
