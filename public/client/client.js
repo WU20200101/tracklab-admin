@@ -330,15 +330,45 @@
     renderVersionsFor(packSel.value);
     if (defVer) verSel.value = defVer;
 
-    // 绑定变化：只更新版本下拉，不做任何策略
-    packSel.addEventListener("change", () => {
-      renderVersionsFor(packSel.value);
+    // ===== 新增：统一清空（像 form 一样）=====
+    function resetClientStateForPackOrVersionChange() {
+      // 清空账号/角色选择
       clearAccountsUI();
       clearPresetsUI();
+
+      // 清空缓存 preset（否则 preview/generate 可能还用旧 preset）
+      currentPreset = null;
+
+      // 清空所有输出面板（否则视觉上像“没清空”）
       setPre("accountOut", null);
       setPre("presetOut", null);
+      setPre("previewOut", null);
+      setPre("genRaw", null);
+      setPre("genText", null);
+      setPre("evalOut", null);
+      setPre("outcomeOut", null);
+      setPre("statsOut", null);
+
+      // 也可选：清空 inFlight，避免按钮状态卡住
+      __inFlight = { preview: false, generate: false };
+    }
+
+    // 绑定变化：切 pack → 重建版本列表 + 清空下游
+    packSel.addEventListener("change", () => {
+      renderVersionsFor(packSel.value);
+
+      // ✅ 像 form 一样：切 pack 直接清空所有下游状态
+      resetClientStateForPackOrVersionChange();
+
       setStatus("info", "pack 已切换：请重新选择用户名/账号/角色");
     });
+
+    // ✅ 新增：切版本也要清空（你现在缺的就是这个）
+    verSel.addEventListener("change", () => {
+      resetClientStateForPackOrVersionChange();
+      setStatus("info", "版本已切换：请重新选择用户名/账号/角色");
+    });
+
   }
 
   /** =====================================================
@@ -907,6 +937,7 @@
   boot().catch(showError);
 
 })();
+
 
 
 
