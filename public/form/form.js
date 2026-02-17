@@ -93,11 +93,11 @@
   function getPackId() {
     return $("packId")?.value || "";
   }
-  function getPackVersion() {
-    const v = ($("packVersion")?.value || "").trim();
-    if (!v) throw new Error("pack_version_required");
-    return v;
-  }
+function getPackVersion() {
+  const v = (($("packVer")?.value || $("packVersion")?.value || "") + "").trim();
+  if (!v) throw new Error("pack_version_required");
+  return v;
+}
 
   /** =====================================================
    * PACK SELECTORS (from /packs/index) —— 与 client.js 一致
@@ -156,6 +156,14 @@
       setStatus("info", "pack 已切换：请重新选择用户名/账号/角色");
       boot().catch((e) => setStatus("err", e.message));
     });
+    verSel.addEventListener("change", () => {
+  // 切版本：只重置 schema/preset 相关状态，然后重新 boot
+  uiSchema = null;
+  manifest = null;
+  currentPresetId = "";
+  setStatus("info", "版本已切换：重新加载 schema…");
+  boot().catch((e) => setStatus("err", e.message));
+});
   }
 
   /** =====================================================
@@ -774,6 +782,7 @@ if (isStageRulesRef) {
     if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
   }
 })();
+
 
 
 
