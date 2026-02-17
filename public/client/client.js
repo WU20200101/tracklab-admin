@@ -335,6 +335,10 @@
       // 清空账号/角色选择
       clearAccountsUI();
       clearPresetsUI();
+            // ✅ 清空“用户名”下拉
+      const ownerSel = $("ownerId");
+      if (ownerSel) ownerSel.value = "";
+
 
       // 清空缓存 preset（否则 preview/generate 可能还用旧 preset）
       currentPreset = null;
@@ -937,6 +941,7 @@
   boot().catch(showError);
 
 })();
+
 
 
 
