@@ -229,6 +229,56 @@
     if (el && !el.value) el.value = todayYMD();
   }
 
+    /** =====================================================
+   * PACK META + TRANSFORMS (pack-driven, no hardcode)
+   * ===================================================== */
+
+  // cache: key = `${pack_id}@${pack_version}`
+  const __PACK_META_CACHE = new Map();
+
+  async function getPackMeta(pack_id, pack_version) {
+    const k = `${pack_id}@${pack_version}`;
+    if (__PACK_META_CACHE.has(k)) return __PACK_META_CACHE.get(k);
+
+    // Worker 已有 /pack/:pack_id/:pack_version
+    const meta = await httpJson(`${apiBase()}/pack/${encodeURIComponent(pack_id)}/${encodeURIComponent(pack_version)}`, {
+      method: "GET",
+    });
+
+    __PACK_META_CACHE.set(k, meta);
+    return meta;
+  }
+
+  function extractPickOneKeysFromUiSchema(ui_schema) {
+    // 约定：字段上加 `x_pick_one: true`
+    const keys = [];
+    const groups = ui_schema?.groups || [];
+    for (const g of groups) {
+      const fields = g?.fields || [];
+      for (const f of fields) {
+        if (f && f.x_pick_one === true && typeof f.key === "string") keys.push(f.key);
+      }
+    }
+    return keys;
+  }
+
+  function applyTransformsByUiSchema(ui_schema, payload) {
+    // 这一步先实现为：只有 x_pick_one 才会改动，其余完全不动
+    const out = payload ? JSON.parse(JSON.stringify(payload)) : {};
+    const pickOneKeys = extractPickOneKeysFromUiSchema(ui_schema);
+
+    for (const key of pickOneKeys) {
+      const v = out[key];
+      if (!Array.isArray(v)) continue;
+      if (v.length <= 1) continue;
+
+      // 核心：从多选数组里随机缩成单元素数组（仍保持数组类型，兼容现有 translatePayload 行为）
+      const idx = Math.floor(Math.random() * v.length);
+      out[key] = [v[idx]];
+    }
+    return out;
+  }
+
   /** =====================================================
    * PACK SELECTORS (from /packs/index)
    * ===================================================== */
@@ -280,15 +330,49 @@
     renderVersionsFor(packSel.value);
     if (defVer) verSel.value = defVer;
 
-    // 绑定变化：只更新版本下拉，不做任何策略
-    packSel.addEventListener("change", () => {
-      renderVersionsFor(packSel.value);
+    // ===== 新增：统一清空（像 form 一样）=====
+    function resetClientStateForPackOrVersionChange() {
+      // 清空账号/角色选择
       clearAccountsUI();
       clearPresetsUI();
+            // ✅ 清空“用户名”下拉
+      const ownerSel = $("ownerId");
+      if (ownerSel) ownerSel.value = "";
+
+
+      // 清空缓存 preset（否则 preview/generate 可能还用旧 preset）
+      currentPreset = null;
+
+      // 清空所有输出面板（否则视觉上像“没清空”）
       setPre("accountOut", null);
       setPre("presetOut", null);
+      setPre("previewOut", null);
+      setPre("genRaw", null);
+      setPre("genText", null);
+      setPre("evalOut", null);
+      setPre("outcomeOut", null);
+      setPre("statsOut", null);
+
+      // 也可选：清空 inFlight，避免按钮状态卡住
+      __inFlight = { preview: false, generate: false };
+    }
+
+    // 绑定变化：切 pack → 重建版本列表 + 清空下游
+    packSel.addEventListener("change", () => {
+      renderVersionsFor(packSel.value);
+
+      // ✅ 像 form 一样：切 pack 直接清空所有下游状态
+      resetClientStateForPackOrVersionChange();
+
       setStatus("info", "pack 已切换：请重新选择用户名/账号/角色");
     });
+
+    // ✅ 新增：切版本也要清空（你现在缺的就是这个）
+    verSel.addEventListener("change", () => {
+      resetClientStateForPackOrVersionChange();
+      setStatus("info", "版本已切换：请重新选择用户名/账号/角色");
+    });
+
   }
 
   /** =====================================================
@@ -480,15 +564,18 @@
     await presetRefreshList();
   }
 
-  async function previewPrompt() {
+    async function previewPrompt() {
     if (__inFlight.preview) return;
     __inFlight.preview = true;
 
     try {
-      const preset_id = getPresetIdStrict();
-      if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-      ensurePresetEnabledForOps();
+      const preset_id = getPresetIdStrict(); // ✅ 新增：定义 preset_id
+      if (!currentPreset || currentPreset.id !== preset_id) await presetLoad(); // ✅ 确保 currentPreset 已加载
+      ensurePresetEnabledForOps(); // ✅ 可选：防淘汰角色继续操作
 
+      const meta = await getPackMeta(getPackId(), getPackVersion());
+      const payloadPicked = applyTransformsByUiSchema(meta?.ui_schema, currentPreset.payload);
+      
       const out = await httpJson(`${apiBase()}/preview`, {
         method: "POST",
         body: JSON.stringify({
@@ -496,7 +583,7 @@
           pack_version: getPackVersion(),
           preset_id,
           stage: currentPreset.stage,
-          payload: currentPreset.payload,
+          payload: payloadPicked,
         }),
       });
 
@@ -536,7 +623,7 @@
     return `标题：${title}\n副标题：${subtitle}\n--------\n正文：\n${content}\n--------\n标签：${tags}`;
   }
 
-  async function generateContent() {
+    async function generateContent() {
     if (__inFlight.generate) return;
     __inFlight.generate = true;
 
@@ -544,11 +631,12 @@
     if (btn) btn.disabled = true;
 
     try {
-      const preset_id = getPresetIdStrict();
-      if (!currentPreset?.id || currentPreset.id !== preset_id) await presetLoad();
-      ensurePresetEnabledForOps();
+      const preset_id = getPresetIdStrict(); // ✅ 新增：定义 preset_id
+      if (!currentPreset || currentPreset.id !== preset_id) await presetLoad(); // ✅ 确保 currentPreset 已加载
+      ensurePresetEnabledForOps(); // ✅ 可选：防淘汰角色继续操作
 
-      setStatus("info", "Generate 中…");
+      const meta = await getPackMeta(getPackId(), getPackVersion());
+      const payloadPicked = applyTransformsByUiSchema(meta?.ui_schema, currentPreset.payload);
 
       const out = await httpJson(`${apiBase()}/generate`, {
         method: "POST",
@@ -557,7 +645,7 @@
           pack_version: getPackVersion(),
           preset_id,
           stage: currentPreset.stage,
-          payload: currentPreset.payload,
+          payload: payloadPicked,
         }),
       });
 
@@ -851,4 +939,9 @@
   }
 
   boot().catch(showError);
+
 })();
+
+
+
+
