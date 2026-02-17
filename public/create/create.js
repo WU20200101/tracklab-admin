@@ -166,13 +166,55 @@
       });
     }
 
-    if (defPackId) packSel.value = defPackId;
+        if (defPackId) packSel.value = defPackId;
     renderVersionsFor(packSel.value);
     if (defVer) verSel.value = defVer;
 
-    packSel.addEventListener("change", () => {
-      renderVersionsFor(packSel.value);
-      setStatus("info", "pack 已切换：请重新选择用户名/账号后再创建 preset");
+    // ===== 新增：每个 pack 的默认版本映射（优先用该 pack 的 versions[0]；再用 index.default 覆盖默认 pack） =====
+    const defaultVerByPack = new Map();
+    packs.forEach((p) => {
+      const pid = String(p.pack_id || "").trim();
+      const vers = Array.isArray(p.versions) ? p.versions : [];
+      const v = String(vers?.[0]?.pack_version || "").trim();
+      if (pid) defaultVerByPack.set(pid, v);
+    });
+    if (defPackId && defVer) defaultVerByPack.set(String(defPackId).trim(), String(defVer).trim());
+
+    // ===== 新增：统一 reload（切 pack / 切版本都走它）=====
+    async function reloadPackSchemaAndForm() {
+      await loadPackSchema();
+      renderFormS0();
+
+      // 切 pack/version 后强制清空 owner/account（避免跨 pack 误用）
+      currentOwnerId = "";
+      currentAccountId = "";
+
+      const ownerSel = $("ownerId");
+      if (ownerSel) ownerSel.value = "";
+
+      clearAccounts();
+      clearResult();
+      updateCreateButtonState();
+    }
+
+    // ===== 修改：切 pack 时自动回到该 pack 的默认 version，并 reload schema+表单 =====
+    packSel.addEventListener("change", async () => {
+      const pid = packSel.value;
+
+      renderVersionsFor(pid);
+
+      // ✅ 自动回默认版本
+      const dv = defaultVerByPack.get(String(pid || "").trim()) || "";
+      if (dv) verSel.value = dv;
+
+      await reloadPackSchemaAndForm();
+      setStatus("ok", `pack 已切换：${getPackId()} / ${getPackVersion()}`);
+    });
+
+    // ===== 新增：切版本时 reload schema+表单 =====
+    verSel.addEventListener("change", async () => {
+      await reloadPackSchemaAndForm();
+      setStatus("ok", `版本已切换：${getPackId()} / ${getPackVersion()}`);
     });
   }
 
