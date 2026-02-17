@@ -171,7 +171,13 @@ pre{
   border: 1px solid var(--line);
   color: var(--muted);
 }
-
+.grouphead{
+  margin:12px 0 8px;
+  padding-top:10px;
+  border-top:1px dashed var(--line);
+  font-weight:700;
+  color:var(--ink);
+}
 /* multi_enum pill checks (form.js) */
 .checks{
   display:flex;
