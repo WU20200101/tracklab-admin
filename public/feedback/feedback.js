@@ -382,7 +382,7 @@ const idsToClear = [
   "fbPosts",
   "fbViews",
   "fbLikes",
-  "fbSaves",
+  "fbCollects",
   "fbComments",
   "fbDmInbound",
   "fbNote",
@@ -979,6 +979,7 @@ if (fbDate) fbDate.valueAsDate = new Date();
   boot().catch(showError);
 
 })();
+
 
 
 
