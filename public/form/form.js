@@ -532,65 +532,79 @@ function getPackVersion() {
       }</div>`;
       box.appendChild(head);
 
-      for (const f of groups.get(st) || []) {
-        const key = f.key;
-        const label = f.label || key;
+      // ===== 新增：在同一个 stage box 内按 __group 再分组，显示 groups[].label =====
+      const items = groups.get(st) || [];
 
-        const isEditable =
-          Array.isArray(f.editable_stages) &&
-          f.editable_stages.includes(currentStage) &&
-          Number(currentPreset.enabled) === 1;
+      // 按 __group 分组（保持原顺序）
+      const byGroup = new Map();
+      const groupOrder = [];
+      for (const f of items) {
+        const gname = String(f.__group || "");
+        if (!byGroup.has(gname)) {
+          byGroup.set(gname, []);
+          groupOrder.push(gname);
+        }
+        byGroup.get(gname).push(f);
+      }
 
-        const wrap = document.createElement("div");
-        wrap.style.marginBottom = "10px";
-
-        const lab = document.createElement("label");
-        const required =
-          Array.isArray(f.required_stages) && f.required_stages.includes(currentStage);
-        lab.textContent = label + (required ? " *" : "");
-        wrap.appendChild(lab);
-
-        const input = buildInputForField(f, currentPayload?.[key]);
-        input.id = `fld__${key}`;
-        setControlDisabled(input, !isEditable);
-
-                // ✅ topic_bank：更新/升级页“可见但不可改”
-        const topicSelectorKey = manifest?.topic?.selector_field; // e.g. "topic_bank"
-        const isTopicSelector = topicSelectorKey && key === topicSelectorKey;
-
-        // 已加载 preset（=更新/升级场景）时，一律锁死 topic_bank
-        if (isTopicSelector && currentPreset?.id) {
-          setControlDisabled(input, true);
-        } else {
-          setControlDisabled(input, !isEditable);
+      for (const gname of groupOrder) {
+        // 插入 group 标题（空 group 名就不插标题）
+        if (gname) {
+          const gh = document.createElement("div");
+          gh.className = "grouphead";
+          gh.innerHTML = `<b>${escapeHtml(gname)}</b>`;
+          box.appendChild(gh);
         }
 
-        // ✅ 永久冻结：升级/作废规则（stage_rules_ref）在 form 页任何阶段都不可改
-const isStageRulesRef = key === "stage_rules_ref";
-if (isStageRulesRef) {
-  setControlDisabled(input, true);
-} else {
-  // 原有逻辑不变
-  const topicSelectorKey = manifest?.topic?.selector_field; // e.g. "topic_bank"
-  const isTopicSelector = topicSelectorKey && key === topicSelectorKey;
+        for (const f of byGroup.get(gname) || []) {
+          const key = f.key;
+          const label = f.label || key;
 
-  if (isTopicSelector && currentPreset?.id) {
-    setControlDisabled(input, true);
-  } else {
-    setControlDisabled(input, !isEditable);
-  }
-}
+          const isEditable =
+            Array.isArray(f.editable_stages) &&
+            f.editable_stages.includes(currentStage) &&
+            Number(currentPreset.enabled) === 1;
 
-        wrap.appendChild(input);
+          const wrap = document.createElement("div");
+          wrap.style.marginBottom = "10px";
 
-        if (f.help) {
-          const help = document.createElement("div");
-          help.className = "stagehint";
-          help.textContent = f.help;
-          wrap.appendChild(help);
+          const lab = document.createElement("label");
+          const required =
+            Array.isArray(f.required_stages) && f.required_stages.includes(currentStage);
+          lab.textContent = label + (required ? " *" : "");
+          wrap.appendChild(lab);
+
+          const input = buildInputForField(f, currentPayload?.[key]);
+          input.id = `fld__${key}`;
+
+          // ✅ 永久冻结：升级/作废规则（stage_rules_ref）在 form 页任何阶段都不可改
+          const isStageRulesRef = key === "stage_rules_ref";
+          if (isStageRulesRef) {
+            setControlDisabled(input, true);
+          } else {
+            // ✅ topic_bank：更新/升级页“可见但不可改”
+            const topicSelectorKey = manifest?.topic?.selector_field; // e.g. "topic_bank"
+            const isTopicSelector = topicSelectorKey && key === topicSelectorKey;
+
+            // 已加载 preset（=更新/升级场景）时，一律锁死 topic_bank
+            if (isTopicSelector && currentPreset?.id) {
+              setControlDisabled(input, true);
+            } else {
+              setControlDisabled(input, !isEditable);
+            }
+          }
+
+          wrap.appendChild(input);
+
+          if (f.help) {
+            const help = document.createElement("div");
+            help.className = "stagehint";
+            help.textContent = f.help;
+            wrap.appendChild(help);
+          }
+
+          box.appendChild(wrap);
         }
-
-        box.appendChild(wrap);
       }
 
       c.appendChild(box);
@@ -782,6 +796,7 @@ if (isStageRulesRef) {
     if ($("debugPrompt")) $("debugPrompt").textContent = "保存后将显示生成脚本预览";
   }
 })();
+
 
 
 
