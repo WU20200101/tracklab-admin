@@ -230,3 +230,9 @@ pre{
 #content-hide {
   display: none;
 }
+
+.grouphead{
+  margin: 14px 0 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+}
