@@ -373,21 +373,11 @@
       return;
     }
 
-    const fields = getAllFieldsFromSchema(uiSchema);
+        // ===== 新逻辑：优先按 groups 渲染（显示 group.label）=====
+    // 如果 schema 没有 groups，则回退到旧逻辑（flatten）
+    const hasGroups = Array.isArray(uiSchema.groups) && uiSchema.groups.length > 0;
 
-    // 仅渲染：min editable stage <= S0（即 S0 可见）；并且只允许编辑 S0 editable
-    const visible = fields.filter((f) => {
-      const first = minStage(f.editable_stages);
-      if (!first) return false;
-      return stageRank(first) <= stageRank(INIT_STAGE);
-    });
-
-    if (!visible.length) {
-      c.innerHTML = `<div class="sub">当前 pack 未定义 S0 可填写字段</div>`;
-      return;
-    }
-
-    // 简化：本页只做 S0，所以不做按 stage 分组展示
+    // 简化：本页只做 S0
     const box = document.createElement("div");
     box.className = "fieldcard";
     box.innerHTML = `
@@ -397,33 +387,103 @@
       </div>
     `;
 
-    for (const f of visible) {
-      const key = f.key;
-      const label = f.label || key;
+    let any = false;
 
-      const wrap = document.createElement("div");
-      wrap.style.marginBottom = "10px";
+    if (hasGroups) {
+      // 按 group 顺序渲染
+      for (const g of uiSchema.groups) {
+        const gFields = Array.isArray(g.fields) ? g.fields : [];
 
-      const lab = document.createElement("label");
-      const required = Array.isArray(f.required_stages) && f.required_stages.includes(INIT_STAGE);
-      lab.textContent = label + (required ? " *" : "");
-      wrap.appendChild(lab);
+        // 仅渲染：min editable stage <= S0（即 S0 可见）
+        const visibleInGroup = gFields.filter((f) => {
+          const first = minStage(f.editable_stages);
+          if (!first) return false;
+          return stageRank(first) <= stageRank(INIT_STAGE);
+        });
 
-      const input = buildInputForField(f, null);
-      input.id = `fld__${key}`;
-      setControlDisabled(input, false);
+        if (!visibleInGroup.length) continue;
+        any = true;
 
-      wrap.appendChild(input);
+        // 渲染 group 标题（你要的 label）
+        const gh = document.createElement("div");
+        gh.className = "grouphead";
+        gh.innerHTML = `<b>${escapeHtml(g.label || g.id || "")}</b>`;
+        box.appendChild(gh);
 
-      if (f.help) {
-        const help = document.createElement("div");
-        help.className = "stagehint";
-        help.textContent = f.help;
-        wrap.appendChild(help);
+        // 渲染该组字段
+        for (const f of visibleInGroup) {
+          const key = f.key;
+          const label = f.label || key;
+
+          const wrap = document.createElement("div");
+          wrap.style.marginBottom = "10px";
+
+          const lab = document.createElement("label");
+          const required = Array.isArray(f.required_stages) && f.required_stages.includes(INIT_STAGE);
+          lab.textContent = label + (required ? " *" : "");
+          wrap.appendChild(lab);
+
+          const input = buildInputForField(f, null);
+          input.id = `fld__${key}`;
+          setControlDisabled(input, false);
+          wrap.appendChild(input);
+
+          if (f.help) {
+            const help = document.createElement("div");
+            help.className = "stagehint";
+            help.textContent = f.help;
+            wrap.appendChild(help);
+          }
+
+          box.appendChild(wrap);
+        }
       }
+    } else {
+      // ===== 旧逻辑回退：flatten 渲染 =====
+      const fields = getAllFieldsFromSchema(uiSchema);
 
-      box.appendChild(wrap);
+      const visible = fields.filter((f) => {
+        const first = minStage(f.editable_stages);
+        if (!first) return false;
+        return stageRank(first) <= stageRank(INIT_STAGE);
+      });
+
+      if (visible.length) any = true;
+
+      for (const f of visible) {
+        const key = f.key;
+        const label = f.label || key;
+
+        const wrap = document.createElement("div");
+        wrap.style.marginBottom = "10px";
+
+        const lab = document.createElement("label");
+        const required = Array.isArray(f.required_stages) && f.required_stages.includes(INIT_STAGE);
+        lab.textContent = label + (required ? " *" : "");
+        wrap.appendChild(lab);
+
+        const input = buildInputForField(f, null);
+        input.id = `fld__${key}`;
+        setControlDisabled(input, false);
+        wrap.appendChild(input);
+
+        if (f.help) {
+          const help = document.createElement("div");
+          help.className = "stagehint";
+          help.textContent = f.help;
+          wrap.appendChild(help);
+        }
+
+        box.appendChild(wrap);
+      }
     }
+
+    if (!any) {
+      c.innerHTML = `<div class="sub">当前 pack 未定义 S0 可填写字段</div>`;
+      return;
+    }
+
+    c.appendChild(box);
 
     c.appendChild(box);
   }
