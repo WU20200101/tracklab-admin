@@ -397,39 +397,7 @@
       </div>
     `;
 
-        // ===== 新增：按 group 插入分组标题（显示 schema.groups[].label）=====
-    // 为了保持 group 顺序：用 schema.groups 的顺序建立一个排序权重
-    const groupOrder = new Map();
-    if (Array.isArray(uiSchema.groups)) {
-      uiSchema.groups.forEach((g, i) => {
-        const name = String(g.label || g.id || "");
-        groupOrder.set(name, i);
-      });
-    }
-
-    // 给 visible 保留原始顺序，并按 group 顺序排序（同组内保持原序）
-    const visibleSorted = visible
-      .map((f, idx) => ({ ...f, __idx: idx }))
-      .sort((a, b) => {
-        const ga = String(a.__group || "");
-        const gb = String(b.__group || "");
-        const oa = groupOrder.has(ga) ? groupOrder.get(ga) : 999;
-        const ob = groupOrder.has(gb) ? groupOrder.get(gb) : 999;
-        if (oa !== ob) return oa - ob;
-        return a.__idx - b.__idx;
-      });
-    
-    let lastGroup = null;
-    
-    for (const f of visibleSorted) {
-      const gname = String(f.__group || "");
-      if (gname && gname !== lastGroup) {
-        const gh = document.createElement("div");
-        gh.className = "grouphead";
-        gh.innerHTML = `<b>${escapeHtml(gname)}</b>`;
-        box.appendChild(gh);
-        lastGroup = gname;
-        
+    for (const f of visible) {
       const key = f.key;
       const label = f.label || key;
 
